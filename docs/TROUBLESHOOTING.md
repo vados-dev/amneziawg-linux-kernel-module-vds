@@ -22,7 +22,10 @@ sudo dnf install -y kernel-devel-$(uname -r)
 Then rebuild:
 
 ```shell
+sudo dkms install "amneziawg/$(dkms status | grep amneziawg | awk -F'[/: ]+' '{print $2}' | head -1)" -k $(uname -r)
+or:
 sudo dkms install "amneziawg/$(dkms status | grep amneziawg | awk -F'[/, ]+' '{print $2}' | head -1)" -k $(uname -r)
+                                                                       ^
 ```
 
 To prevent this in the future, install the headers meta-package — see [Installation](INSTALL.md#1-install-prerequisites).
@@ -30,11 +33,14 @@ To prevent this in the future, install the headers meta-package — see [Install
 ## Updating to a new version
 
 ```shell
-cd amneziawg-linux-kernel-module-awg/src
+cd amneziawg-linux-kernel-module-vds/src
 git pull
 
 # Remove old DKMS registration:
+sudo dkms remove "amneziawg/$(dkms status | grep amneziawg | awk -F'[/: ]+' '{print $2}' | head -1)" --all
+or
 sudo dkms remove "amneziawg/$(dkms status | grep amneziawg | awk -F'[/, ]+' '{print $2}' | head -1)" --all
+                                                                      ^
 
 # Install new version:
 sudo make dkms-install

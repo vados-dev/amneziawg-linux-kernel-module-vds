@@ -33,4 +33,4 @@ All changes relative to upstream [amneziawg-linux-kernel-module](https://github.
 ## Build & deployment
 
 - **dkms.conf** — added `MAKE` and `CLEAN` directives (DKMS failed to rebuild on kernel update without them)
-- **Makefile** — auto-versioning from git commit timestamp (`1.0.YYYYMMDD-HH.MM-awg`)
+- **Makefile** — auto-versioning from git commit timestamp (`2.0.YYYYMMDD-vds`)

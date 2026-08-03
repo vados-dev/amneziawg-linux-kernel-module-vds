@@ -67,8 +67,8 @@ sudo apk add gcc make linux-headers
 ## 2. Build and install
 
 ```shell
-git clone https://github.com/Advanced-WG/amneziawg-linux-kernel-module-awg.git
-cd amneziawg-linux-kernel-module-awg/src
+git clone https://github.com/vados-dev/amneziawg-linux-kernel-module-vds.git
+cd amneziawg-linux-kernel-module-vds/src
 ```
 
 ### Option A — DKMS (recommended)
