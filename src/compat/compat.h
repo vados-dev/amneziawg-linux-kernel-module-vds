@@ -18,13 +18,6 @@
 #define ISRHEL8
 #elif RHEL_MAJOR == 9
 #define ISRHEL9
-#elif RHEL_MAJOR == 10
-#define ISRHEL10
-#if RHEL_MINOR == 0
-#define ISRHEL100
-#elif RHEL_MINOR == 1
-#define ISRHEL101
-#endif
 #endif
 #endif
 #ifdef UTS_UBUNTU_RELEASE_ABI
@@ -1303,11 +1296,11 @@ static inline int timer_delete(struct timer_list *timer)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0) && !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
 #define timer_container_of from_timer
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0) && !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 #include <linux/in6.h>
 struct sockaddr_inet {
 	unsigned short	sa_family;
@@ -1316,7 +1309,7 @@ struct sockaddr_inet {
 };
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0) && !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
 #include <linux/netdevice.h>
 static inline void netif_threaded_enable(struct net_device *dev) { }
 #endif
@@ -1406,24 +1399,49 @@ static inline char *nla_strdup(const struct nlattr *nla, gfp_t flags)
 #define COMPAT_CANNOT_USE_NETLINK_MCGRPS
 #endif
 
-/* Kernel 6.19+ renamed blake2s_state to blake2s_ctx and changed blake2s() arg order.
- * On kernels < 5.10 with zinc crypto (COMPAT_INIT_CRYPTO / ISUBUNTU2004), we must
- * use zinc's own blake2s header to avoid duplicate symbol conflicts with the
- * system <crypto/blake2s.h> whose names are already macro-remapped to zinc_*.
- */
+/* Kernel 6.19+ renamed blake2s_state to blake2s_ctx and changed blake2s() arg order */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
-    #if defined(ISUBUNTU2004) || defined(COMPAT_INIT_CRYPTO)
-        #include "../crypto/include/zinc/blake2s.h"
-        #ifndef _CRYPTO_BLAKE2S_H
-            #define _CRYPTO_BLAKE2S_H
-        #endif
-    #else
-        #include <crypto/blake2s.h>
-    #endif
+#include <crypto/blake2s.h>
+#define blake2s_ctx blake2s_state
+#define blake2s(key, keylen, in, inlen, out, outlen) \
+	blake2s(out, in, key, outlen, inlen, keylen)
+#endif
 
-    #define blake2s_ctx blake2s_state
-    #define blake2s(key, keylen, in, inlen, out, outlen) \
-            (blake2s)((u8 *)(out), (const u8 *)(in), (const u8 *)(key), (size_t)(outlen), (size_t)(inlen), (size_t)(keylen))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(7, 1, 0) && !IS_ENABLED(CONFIG_IPV6)
+#include <net/ipv6_stubs.h>
+static inline struct dst_entry *ip6_dst_lookup_flow(struct net *net, const struct sock *sk, struct flowi6 *fl6,
+				      const struct in6_addr *final_dst) {
+	return ipv6_stub->ipv6_dst_lookup_flow(net, sk, fl6, final_dst);
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+#include <crypto/chacha.h>
+#define CHACHA_KEY_WORDS	8
+#ifndef CHACHA_STATE_WORDS
+#define CHACHA_STATE_WORDS	(CHACHA_BLOCK_SIZE / sizeof(u32))
+#endif
+
+struct chacha_state {
+	u32 x[CHACHA_STATE_WORDS];
+};
+
+static inline void __compat_chacha_init(struct chacha_state *state,
+					const u32 *key,
+					const u8 *iv)
+{
+	(chacha_init)(state->x, key, iv);
+}
+#define chacha_init(state, key, iv) __compat_chacha_init((state), (key), (iv))
+
+static inline void __compat_chacha20_crypt(struct chacha_state *state,
+					       u8 *dst, const u8 *src,
+					       unsigned int bytes)
+{
+	(chacha20_crypt)(state->x, dst, src, bytes);
+}
+#define chacha20_crypt(s, d, src, b) __compat_chacha20_crypt((s),(d),(src),(b))
+
 #endif
 
 #endif /* _WG_COMPAT_H */
