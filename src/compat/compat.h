@@ -1330,7 +1330,7 @@ static inline void netif_threaded_enable(struct net_device *dev) { }
 #define COMPAT_CANNOT_USE_PCPU_STAT_TYPE
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0) && !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))
 #define COMPAT_CANNOT_USE_RTNL_NEWLINK_PARAMS
 struct rtnl_newlink_params {
 	struct net *src_net;
