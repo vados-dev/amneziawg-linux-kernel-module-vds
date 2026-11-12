@@ -1,34 +1,29 @@
-# 01 — Purpose
+Translate
+Show Original
+Lang: ru
+Engine: google
+01 — Цель
+Извлечено из файла AGENTS.md . Этот файл содержит проектную информацию.
 
-Extracted from AGENTS.md. This file is project law.
+Обзор проекта
+LucX-UI — это форк 3x-ui (в настоящее время v3.10.2 ), который добавляет встроенную поддержку AmneziaWG (AWG) в качестве вспомогательного контейнера интерфейса ядра, повторяя архитектуру вспомогательного контейнера MTProto (mtg) из основного репозитория. Специфический для LucX код находится в internal/awg/ и internal/lucx/; все точки интеграции в исходных файлах заключены в LUCX-HOOK/ END LUCX-HOOKмаркеры.
 
----
+Стратегия синхронизации с исходным кодом: слияние origin/main(не rebase, не fresh-checkout). Синхронизация v3.5.0→3.6.0 доказала работоспособность изоляции: из 432 файлов, измененных вышестоящим репозиторием, конфликтовали только 7 , поэтому простая git merge origin/mainТеперь используется следующая процедура — см. Правило 8. Фиксация слияния сохраняет историю исходного кода, поэтому каждая последующая синхронизация является инкрементальной. Старый способ... .patch— Файловая система удалена; интеграция осуществляется непосредственно в систему.
 
-## Project Overview
+Пульты дистанционного управления:
 
-LucX-UI is a fork of [3x-ui](https://github.com/MHSanaei/3x-ui) (currently **v3.10.2**) that adds native AmneziaWG (AWG) support as a kernel-interface sidecar, mirroring upstream's MTProto (mtg) sidecar architecture. LucX-specific code lives in `internal/awg/` and `internal/lucx/`; all integration points in upstream files are wrapped in `LUCX-HOOK` / `END LUCX-HOOK` markers.
+origin→ MHSanaei/3x-ui(вверх по течению)
+gh→ AlexeyLCP/lucx-ui(наша вилка; источник истины)
+sc→ ssh://ssh.sourcecraft.dev/alexeylcp/lucx-ui.git(Зеркало Яндекса на SourceCraft; собственная CI/releases)
+Активная ветка: main(v3.10.0 наложение; текущая версия) lucxVersionнаходится в internal/config/config.go).
 
-**Upstream sync strategy:** **merge** `origin/main` (not rebase, not fresh-checkout). The v3.5.0→3.6.0 sync proved the isolation works: of 432 upstream-changed files only **7** conflicted, so a plain `git merge origin/main` is now the procedure — see Rule 8. The merge commit keeps upstream history, so each next sync is incremental. The old `.patch`-file system is gone; integration is inline.
+Основная философия
+Минимальное вмешательство для упрощения синхронизации с исходным кодом. Цель: каждый релиз в исходном коде должен быть практически тривиальным переносом. Это означает:
 
-**Remotes:**
-- `origin` → `MHSanaei/3x-ui` (upstream)
-- `gh` → `AlexeyLCP/lucx-ui` (our fork; source of truth)
-- `sc` → `ssh://ssh.sourcecraft.dev/alexeylcp/lucx-ui.git` (Yandex SourceCraft mirror; own CI/releases)
+Код LucX находится в изолированных пакетах ( internal/awg/, internal/lucx/), не разбросаны по исходным файлам.
+Файлы из вышестоящего источника получают ТОЛЬКО LUCX-HOOKблочное редактирование — никогда не допускается свободное редактирование.
+Боковой модуль AWG должен быть таким же тонким, как и боковой модуль MTProto. Если MTProto делает это в N файлах, AWG тоже должен стремиться к N. (Известная проблема № 1 закрыта — основной пакет содержит 9 файлов, что полностью соответствует MTProto.)
+AWG sidecar = шаблон mtproto. AWG работает как sidecar интерфейса ядра, точно симметричный относительно internal/mtproto/:
 
-**Active branch:** `main` (v3.10.0 overlay; current `lucxVersion` is in `internal/config/config.go`).
-
----
-
-## Core Philosophy
-
-**Minimal invasion for easy upstream sync.** The goal is: every upstream release should be a near-trivial port. This means:
-- LucX code lives in isolated packages (`internal/awg/`, `internal/lucx/`), not scattered across upstream files.
-- Upstream files get ONLY `LUCX-HOOK` blocks — never free-form edits.
-- The AWG sidecar should be as thin as the MTProto sidecar. If mtproto does it in N files, AWG should aim for N too. (Known Issue #1 is closed — core package is at 9 files, exact parity with mtproto.)
-
-**AWG sidecar = mtproto pattern.** AWG runs as a kernel-interface sidecar exactly symmetric with `internal/mtproto/`:
-
-```
 mtproto:  mtg sidecar (userspace)  → TCP → SOCKS loopback inbound → Xray routing
 AWG:      awg kernel module        → IP   → TUN inbound             → Xray routing
-```
