@@ -11,15 +11,7 @@
 | `05-rules.md` | Всегда в начале. Священные законы (0 / 0b / хуки / лицензия / документация на английском языке). |
 | `06-workflow.md` | Кодирование, тесты, релиз, коммиты, защита от пушей. |
 | `07-debug-awg.md` | Установление соединения AWG / трафик / модуль / AllowedIPs. |
-| `07-debug-tunnels.md` | Naive / olcRTC / TrustTunnel / остатки mieru. |
-| `07-debug-frontend.md` | Пользовательский интерфейс, интерфейс CI, хост подписки. |
-| `07-debug-sync.md` | При слиянии с апстримом потеряны ключи LUCX-HOOK / i18n. |
-| `08-hooks.md` | Каталог оверлеев: исходные файлы с LUCX-HOOK. Следующее слияние с апстримом. |
 
-Также по запросу, а не при запуске:
-
-- `docs/progress.md` — последние 1–2 записи
-- `CLAUDE.md` / `docs/architecture.md` — стандартная навигация 3x-ui
-- `docs/LICENSING.md` — разделение лицензий
 
 `AGENTS.md` — это только указатель. Обновите соответствующий файл `.agents/`, а не `AGENTS.md`.
+Ориг: https://github.com/amnezia-vpn/amneziawg-linux-kernel-module
