@@ -28,7 +28,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          UPSTREAM=$(gh api repos/amnezia-vpn/amneziawg-linux-kernel-module/releases/latest --jq .tag_name)
+          UPSTREAM=$(gh api repos/amnezia-vpn/amneziawg-linux-kernel-module/releases/tag/latest --jq .tag_name)
           BASE="v$(tr -d '[:space:]' < internal/config/version)"
           echo "upstream=$UPSTREAM base=$BASE"
           if [ "$UPSTREAM" = "$BASE" ]; then
