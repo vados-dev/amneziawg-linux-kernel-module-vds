@@ -5,15 +5,12 @@ LABEL maintainer="vados-dev"
 LABEL com.docker.compose.service="amneziawg-ci-runner"
 LABEL com.docker.compose.project="amneziawg-ci"
 
-RUN set -eux; dnf -y update || true
+RUN set -eux; dnf check-update -y > /dev/null 2>&1 || true ;
 RUN set -eux; dnf -y install dnf-plugins-core || true
-RUN set -eux; dnf config-manager --set-enabled crb || true
+RUN set -eux; dnf config-manager --set-enabled crb || true ; dnf check-update -y > /dev/null 2>&1 || true ;
 RUN set -eux; dnf -y install epel-release || true ; dnf check-update -y > /dev/null 2>&1 || true ;
-#
-RUN set -eux; dnf copr enable -y tigro/amneziawg centos-stream-${os_ver}-$(arch)
-    dnf clean all || true
-    dnf makecache || true
-
+# Здесь надо подсунуть ${os_ver}-$(arch) я не помню на вскидку как
+RUN set -eux; dnf copr enable -y tigro/amneziawg centos-stream-${os_ver}-$(arch) || true ; dnf clean all || true ; dnf makecache || true
 RUN set -eux; dnf -y update || true
 
 # Пока не удаляй этот блок:
