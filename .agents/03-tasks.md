@@ -77,9 +77,11 @@
    - [x] Ветка `stable` создаётся явно из исходной ветки `master`.
    - [x] Runner закреплён, добавлены inputs `NOTIFY_ON_UPDATE`/`NOTIFY_ON_RESULT` и env `TG_TOKEN`/`TG_CHAT_ID` в шагах.
 
-6. [-] Telegram-уведомления: inputs `NOTIFY_ON_UPDATE`/`NOTIFY_ON_RESULT` (default `false`),
-   Repository secrets `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` → env `TG_TOKEN`/`TG_CHAT_ID`
-   в шагах, приоритет `true` из inputs выше унаследованных значений. Ожидает проверки запуском.
+6. [-] Telegram-уведомления: единый `notify_mode` (`choice` в `workflow_dispatch`,
+   `string` в `workflow_call`) со значениями `none|inherit|changes|always`, default `none`;
+   `auto_merge` вместо инвертированного `NOTIFY_ON_UPDATE`; kill-switch `vars.TELEGRAM_NOTIFY`;
+   один шаг уведомления на прогон. Repository secrets `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`
+   → env `TG_TOKEN`/`TG_CHAT_ID` в шагах. Ожидает проверки запуском.
 
 ## Отработано
 
