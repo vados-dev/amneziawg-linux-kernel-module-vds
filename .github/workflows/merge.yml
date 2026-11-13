@@ -1,33 +1,69 @@
 name: Merge Upstream
 
-# TODO: This is a working skeleton. The merge step copies upstream-owned
-# directories and overlays internal/vds/src. Refine the file list before
-# enabling automatic runs.
 on:
-  workflow_run:
-    workflows: ["Check Upstream"]
-    types: [completed]
-  workflow_dispatch:
+  workflow_call:
     inputs:
       upstream_ref:
-        description: "Upstream tag or branch (for example v3.1.20260812)"
-        required: true
+        description: "Upstream tag or branch"
+        required: false
         default: "master"
         type: string
       kernel_version:
-        description: "Target kernel version (for example 6.12.0-273.el10.x86_64)"
-        required: true
-        default: "6.12.0-273.el10.x86_64"
+        description: "Target kernel version; empty means the latest available"
+        required: false
+        default: ""
         type: string
       vds_branch:
         description: "VDS branch to merge into"
         required: false
-        default: master
+        default: "master"
         type: string
       dry_run:
         description: "Do not push merge results"
         required: false
         default: true
+        type: boolean
+      NOTIFY_ON_UPDATE:
+        description: "Inherited from check-upstream; true overrides repository defaults"
+        required: false
+        default: false
+        type: boolean
+      NOTIFY_ON_RESULT:
+        description: "Send short result notifications with links to logs and reports"
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream tag or branch"
+        required: false
+        default: "master"
+        type: string
+      kernel_version:
+        description: "Target kernel version; empty means the latest available"
+        required: false
+        default: ""
+        type: string
+      vds_branch:
+        description: "VDS branch to merge into"
+        required: false
+        default: "master"
+        type: string
+      dry_run:
+        description: "Do not push merge results"
+        required: false
+        default: true
+        type: boolean
+      NOTIFY_ON_UPDATE:
+        description: "Override inherited notification mode; false inherits repository default"
+        required: false
+        default: false
+        type: boolean
+      NOTIFY_ON_RESULT:
+        description: "Send short result notifications with links to logs and reports"
+        required: false
+        default: false
         type: boolean
 
 permissions:
@@ -36,17 +72,60 @@ permissions:
 
 env:
   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
-  UPSTREAM_REF: ${{ inputs.upstream_ref }}
-  KERNEL_VERSION: ${{ inputs.kernel_version }}
-  VDS_BRANCH: ${{ inputs.vds_branch }}
+  NOTIFY_ON_UPDATE: ${{ inputs.NOTIFY_ON_UPDATE || vars.NOTIFY_ON_UPDATE == 'true' }}
+  NOTIFY_ON_RESULT: ${{ inputs.NOTIFY_ON_RESULT || vars.NOTIFY_ON_RESULT == 'true' }}
 
 jobs:
   merge:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: quay.io/centos/centos:stream10
       options: --privileged
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      upstream_ref: ${{ steps.resolve.outputs.upstream_ref }}
+      kernel_version: ${{ steps.build.outputs.kernel_version }}
+      version: ${{ steps.prepare.outputs.version }}
+      vds_branch: ${{ steps.resolve.outputs.vds_branch }}
+      dry_run: ${{ steps.resolve.outputs.dry_run }}
     steps:
+      - name: Resolve inputs
+        id: resolve
+        env:
+          IN_UPSTREAM_REF: ${{ inputs.upstream_ref }}
+          IN_KERNEL_VERSION: ${{ inputs.kernel_version }}
+          IN_VDS_BRANCH: ${{ inputs.vds_branch }}
+          IN_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          upstream_ref="${IN_UPSTREAM_REF:-master}"
+          kernel_version="${IN_KERNEL_VERSION:-}"
+          vds_branch="${IN_VDS_BRANCH:-master}"
+          case "${IN_DRY_RUN:-true}" in
+            false|False|FALSE|0) dry_run=false ;;
+            *) dry_run=true ;;
+          esac
+          {
+            echo "UPSTREAM_REF=$upstream_ref"
+            echo "KERNEL_VERSION=$kernel_version"
+            echo "VDS_BRANCH=$vds_branch"
+            echo "DRY_RUN=$dry_run"
+          } >> "$GITHUB_ENV"
+          {
+            echo "upstream_ref=$upstream_ref"
+            echo "kernel_version=$kernel_version"
+            echo "vds_branch=$vds_branch"
+            echo "dry_run=$dry_run"
+          } >> "$GITHUB_OUTPUT"
+          echo "upstream_ref=$upstream_ref kernel_version=${kernel_version:-latest} vds_branch=$vds_branch dry_run=$dry_run"
+
+      - name: Install bootstrap tools
+        run: |
+          set -euo pipefail
+          dnf install -y git tar gzip which
+
       - name: Checkout VDS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,78 +133,155 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf /tmp/vds
-          git clone --branch "$VDS_BRANCH" \
-            "https://x-access-token:${GITHUB_TOKEN}@github.com/${VDS_REPO}.git" /tmp/vds
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" clone \
+            --branch "$VDS_BRANCH" "https://github.com/${VDS_REPO}.git" /tmp/vds
+          git -C /tmp/vds remote set-url origin "https://github.com/${VDS_REPO}.git"
 
-      - name: Install base tools
-        run: |
-          set -euo pipefail
-          dnf install -y git make gcc tar gzip which
-          bash /tmp/vds/scripts/setup.sh -d
+      - name: Install dependencies
+        run: bash /tmp/vds/scripts/setup.sh -d -y
 
       - name: Fetch upstream
         run: |
           set -euo pipefail
           rm -rf /tmp/upstream
-          git clone --depth 1 --branch "$UPSTREAM_REF" \
+          # Full clone is required to diff root files against the previous upstream tag.
+          git clone --branch "$UPSTREAM_REF" \
             "https://github.com/${UPSTREAM_REPO}.git" /tmp/upstream
           [ -d /tmp/upstream/src ] || { echo "::error::upstream src not found"; exit 1; }
 
       - name: Prepare merged tree
+        id: prepare
         run: |
           set -euo pipefail
           rm -rf /tmp/vds-merge
           mkdir -p /tmp/vds-merge
           cp -a /tmp/vds/. /tmp/vds-merge/
 
-          # Replace upstream-owned directories with the fresh upstream copy.
+          # Upstream-owned directories are replaced by the fresh upstream copy.
           rm -rf /tmp/vds-merge/src /tmp/vds-merge/debian /tmp/vds-merge/kernel-tree-scripts
           cp -a /tmp/upstream/src /tmp/vds-merge/
           [ -d /tmp/upstream/debian ] && cp -a /tmp/upstream/debian /tmp/vds-merge/ || true
           [ -d /tmp/upstream/kernel-tree-scripts ] && cp -a /tmp/upstream/kernel-tree-scripts /tmp/vds-merge/ || true
 
-          # Apply the VDS overlay (changed files only).
+          # VDS overlay (rule 11): changed files live in internal/vds/src.
           [ -d /tmp/vds-merge/internal/vds/src ] || { echo "::error::internal/vds/src not found"; exit 1; }
           cp -a /tmp/vds-merge/internal/vds/src/. /tmp/vds-merge/src/
 
-          # Keep the VDS version scheme.
-          upstream_version="${UPSTREAM_REF#v}"
-          printf '%s\n' "$upstream_version" > /tmp/vds-merge/internal/config/version
+          # Previous upstream version from the VDS branch, used for the root-file diff.
+          prev_version="$(tr -d '[:space:]' < /tmp/vds-merge/internal/config/version)"
+
+          # Version: tag name if it looks like a version, otherwise upstream version.h.
+          if [[ "$UPSTREAM_REF" == v* ]]; then
+            version="${UPSTREAM_REF#v}"
+          else
+            version="$(sed -n 's/.*WIREGUARD_VERSION[[:space:]]*"\([^"]*\)".*/\1/p' /tmp/upstream/src/version.h | head -n1)"
+            version="${version%-vds}"
+          fi
+          [ -n "$version" ] || { echo "::error::could not resolve upstream version"; exit 1; }
+
+          printf '%s\n' "$version" > /tmp/vds-merge/internal/config/version
           printf '%s\n' "$UPSTREAM_REF" > /tmp/vds-merge/internal/config/upstream
-          printf '%s-vds\n' "$upstream_version" > /tmp/vds-merge/internal/config/current
-          sed -i "s/^#define WIREGUARD_VERSION .*/#define WIREGUARD_VERSION \"${upstream_version}-vds\"/" \
+          printf '%s-vds\n' "$version" > /tmp/vds-merge/internal/config/current
+          sed -i "s/^#define WIREGUARD_VERSION .*/#define WIREGUARD_VERSION \"${version}-vds\"/" \
             /tmp/vds-merge/src/version.h
+          cp /tmp/vds-merge/src/version.h /tmp/vds-merge/internal/vds/src/version.h
+
+          # Root-level upstream files are owned by VDS: report only what changed upstream
+          # between the previous upstream version and the target ref (rule 11).
+          base_ref=""
+          for candidate in "v${prev_version}" "${prev_version}"; do
+            if git -C /tmp/upstream rev-parse --verify --quiet "${candidate}^{commit}" >/dev/null; then
+              base_ref="$candidate"
+              break
+            fi
+          done
+          changes=""
+          if [ -n "$base_ref" ]; then
+            changes="$(git -C /tmp/upstream diff --name-only "$base_ref" "$UPSTREAM_REF" \
+              | awk -F/ 'NF==1' | tr '\n' ' ')"
+          else
+            echo "::warning::Previous upstream tag ${prev_version} not found; root-file diff skipped"
+          fi
+
+          printf '%s\n' "$changes" > /tmp/root_changes.txt
+          echo "root_changes=$changes" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Merged tree prepared, version ${version}-vds, root changes: ${changes:-none}"
 
       - name: Build and test the merged tree
+        id: build
         working-directory: /tmp/vds-merge
         run: |
           set -euo pipefail
-          bash scripts/setup.sh -l -k "$KERNEL_VERSION" -s
+          bash scripts/setup.sh -l -y -k "$KERNEL_VERSION" -s
           make -C src print-version
+          kernel_used="$(ls -1 /lib/modules | sort -V | tail -n1)"
+          echo "kernel_version=$kernel_used" >> "$GITHUB_OUTPUT"
+          echo "Built for kernel ${kernel_used}"
+
+      - name: Report upstream root file changes
+        if: ${{ steps.prepare.outputs.root_changes != '' }}
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ROOT_CHANGES: ${{ steps.prepare.outputs.root_changes }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then
+            echo "::warning::Upstream root files differ: ${ROOT_CHANGES}"
+            exit 0
+          fi
+          text="merge.yml: upstream ${UPSTREAM_REF} changed root files: ${ROOT_CHANGES}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=${text}" > /dev/null
 
       - name: Push merge result
-        if: ${{ !inputs.dry_run }}
+        if: ${{ steps.resolve.outputs.dry_run == 'false' }}
         working-directory: /tmp/vds-merge
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Merge upstream ${UPSTREAM_REF}" || true
-          git push origin "HEAD:${VDS_BRANCH}"
+          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" push origin "HEAD:${VDS_BRANCH}"
 
-      - name: Notify Telegram on failure
-        if: failure()
+  stable:
+    needs: merge
+    if: ${{ needs.merge.result == 'success' && needs.merge.outputs.dry_run == 'false' }}
+    uses: ./.github/workflows/stable.yml
+    with:
+      version: ${{ needs.merge.outputs.version }}
+      vds_branch: ${{ needs.merge.outputs.vds_branch }}
+      dry_run: false
+      NOTIFY_ON_UPDATE: ${{ inputs.NOTIFY_ON_UPDATE || vars.NOTIFY_ON_UPDATE == 'true' }}
+      NOTIFY_ON_RESULT: ${{ inputs.NOTIFY_ON_RESULT || vars.NOTIFY_ON_RESULT == 'true' }}
+    secrets: inherit
+
+  notify:
+    needs: merge
+    if: ${{ always() && (needs.merge.result == 'failure' || inputs.NOTIFY_ON_RESULT || vars.NOTIFY_ON_RESULT == 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Notify Telegram on result
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          UPSTREAM_REF: ${{ needs.merge.outputs.upstream_ref }}
+          MERGE_RESULT: ${{ needs.merge.result }}
+          VERSION: ${{ needs.merge.outputs.version }}
         run: |
           set -euo pipefail
-          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-            echo "Telegram secrets are not configured — skipping notification"
+          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then
+            echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"
             exit 0
           fi
-          text="merge.yml failed for ${UPSTREAM_REF:-unknown ref}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+          text="merge.yml: ${MERGE_RESULT} for ${UPSTREAM_REF:-unknown ref} (version: ${VERSION:-unknown}). Logs: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
             --data-urlencode "text=${text}" > /dev/null

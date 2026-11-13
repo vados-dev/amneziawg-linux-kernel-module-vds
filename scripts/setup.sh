@@ -5,6 +5,7 @@ set -uo pipefail
 # Common vars
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 cur_dir="${SELF%/*}"
+repo_root="$(cd "${cur_dir}/.." && pwd)"
 
 amf="/etc/modules-load.d/amneziawg.conf"
 wmf="/etc/modules-load.d/wireguard.conf"
@@ -19,20 +20,11 @@ mod_branch="master"
 setup_tmp="${cur_dir}/${mod_repo}-${mod_tmp_ver}"
 
 # State
-INST_DEPS=0
-RM_DEPS=0
-SETUP_MOD=0
-ADD_AWG=0
-CHK_AWG=0
-ADD_WG=0
-DEL_AWG=0
-DEL_WG=0
-REINSTALL=0
-UNINSTALL=0
-LOCAL_BUILD=0
 ACTION=""
 KERNEL_VERSION=""
 MOD_BRANCH="${mod_branch}"
+LOCAL_BUILD=0
+NONINTERACTIVE=0
 
 log()  { printf 'INFO: %s\n' "$*"; }
 warn() { printf 'WARN: %s\n' "$*" >&2; }
@@ -55,9 +47,11 @@ show_help() {
   -dw, delwg            Удалить wireguard из автозагрузки
   -r, reinstall         Переустановить модуль
   -u, uninstall         Удалить DKMS-регистрацию
-  -k, --kernel VER      Собрать и установить модуль для указанной версии ядра
+  -k, --kernel VER      Собрать и установить модуль для указанной версии ядра;
+                        пустое значение означает обновление до последнего ядра
   -b, --branch BRANCH   Ветка VDS для клонирования (по умолчанию master)
   -l, --local           Собирать текущее дерево, не клонировать репозиторий
+  -y, --yes             Неинтерактивный режим (для CI): без подтверждений
   -h, --help            Показать эту справку и выйти
 
 Для подписи модуля и использования в Secure Boot:
@@ -69,14 +63,71 @@ mokutil --import /var/lib/dkms/mok.pub
 EOF
 }
 
+confirm() {
+    local prompt="$1"
+
+    if [ "$NONINTERACTIVE" -eq 1 ]; then
+        return 0
+    fi
+    if [ ! -t 0 ]; then
+        warn "Нет терминала для подтверждения, продолжаю."
+        return 0
+    fi
+
+    local answer
+    read -r -p "${prompt} [y/N]: " answer
+    [[ "$answer" =~ ^[Yy]$ ]]
+}
+
+check_os() {
+    local os_id
+    local os_ver
+
+    if [ ! -r /etc/os-release ]; then
+        err "Не найден /etc/os-release."
+        return 1
+    fi
+
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    os_id="${ID:-}"
+    os_ver="${VERSION_ID:-}"
+
+    case "$os_id" in
+        centos|almalinux|rocky|rhel) ;;
+        *)
+            err "ОС '${os_id:-unknown}' не поддерживается; ожидается RHEL-семейство 9+."
+            return 1
+            ;;
+    esac
+
+    case "${os_ver%%.*}" in
+        9|10) ;;
+        *)
+            err "Версия ОС '${os_ver:-unknown}' не поддерживается; ожидается 9 или 10."
+            return 1
+            ;;
+    esac
+
+    log "ОС: ${os_id} ${os_ver}."
+}
+
 install_deps() {
-    dnf update -y || return 1
-    dnf install -y dkms || return 1
+    local pkgs=(dkms gcc make git tar gzip which curl)
+
+    log "Установка зависимостей: ${pkgs[*]}"
+    dnf install -y "${pkgs[@]}" || {
+        err "Не удалось установить зависимости."
+        return 1
+    }
     log "Зависимости установлены."
 }
 
 remove_deps() {
-    dnf remove -y dkms || return 1
+    dnf remove -y dkms || {
+        err "Не удалось удалить dkms."
+        return 1
+    }
     log "Зависимости удалены."
 }
 
@@ -106,56 +157,76 @@ del_wg_from_modules() {
     log "$wmf удалён."
 }
 
+latest_installed_kernel() {
+    rpm -q --last kernel 2>/dev/null \
+        | awk '/^kernel-/{print $1; exit}' \
+        | sed 's/^kernel-//'
+}
+
 update_kernel() {
     local ver="${KERNEL_VERSION:-}"
     local pkg_ver
     local arch
+
     arch="$(uname -m)"
 
     if [ -z "$ver" ]; then
-        KERNEL_VERSION="$(uname -r)"
-        log "Версия ядра не указана, используется текущая: $KERNEL_VERSION"
-        return 0
+        log "Версия ядра не указана: обновление до последней доступной."
+        confirm "Обновить ядро и заголовки до последней версии?" || {
+            err "Обновление ядра отменено."
+            return 1
+        }
+        dnf install -y kernel kernel-devel kernel-headers || {
+            err "Не удалось установить последнее ядро."
+            return 1
+        }
+        ver="$(latest_installed_kernel)"
+        if [ -z "$ver" ]; then
+            err "Не удалось определить установленную версию ядра."
+            return 1
+        fi
+        log "Установлено ядро: $ver"
+    elif [ -d "/lib/modules/${ver}/build" ]; then
+        log "Заголовки для ядра $ver уже установлены."
+    else
+        pkg_ver="$ver"
+        case "$pkg_ver" in
+            *."$arch") pkg_ver="${pkg_ver%.*}" ;;
+        esac
+
+        log "Установка ядра $pkg_ver и заголовков."
+        dnf install -y "kernel-${pkg_ver}" "kernel-devel-${pkg_ver}" kernel-headers || {
+            err "Не удалось установить ядро $pkg_ver."
+            return 1
+        }
     fi
-
-    if [ "$ver" = "$(uname -r)" ] && [ -d "/lib/modules/${ver}/build" ]; then
-        log "Ядро $ver уже работает, заголовки на месте."
-        return 0
-    fi
-
-    pkg_ver="$ver"
-    case "$pkg_ver" in
-        *."$arch") pkg_ver="${pkg_ver%.*}" ;;
-    esac
-
-    log "Установка ядра $pkg_ver и заголовков."
-    dnf install -y "kernel-${pkg_ver}" "kernel-devel-${pkg_ver}" "kernel-headers-${pkg_ver}" || {
-        err "Не удалось установить ядро $pkg_ver."
-        return 1
-    }
 
     if [ ! -d "/lib/modules/${ver}/build" ]; then
         err "Заголовки для ядра $ver не найдены после установки."
         return 1
     fi
 
-    log "Ядро $ver установлено; сборка будет выполнена для него."
+    KERNEL_VERSION="$ver"
+    log "Целевое ядро для сборки: $KERNEL_VERSION."
 }
 
 start_setup() {
     local mod_ver
     local src_dir
 
+    check_os || return 1
     update_kernel || return $?
 
-    if ! dnf list installed dkms >/dev/null 2>&1; then
+    if ! command -v make >/dev/null 2>&1 \
+        || ! command -v gcc >/dev/null 2>&1 \
+        || ! dnf list installed dkms >/dev/null 2>&1; then
         install_deps || return $?
     fi
 
     if [ "$LOCAL_BUILD" -eq 1 ]; then
-        src_dir="$(pwd)/src"
+        src_dir="${repo_root}/src"
         if [ ! -d "$src_dir" ]; then
-            err "Каталог src не найден в $(pwd)."
+            err "Каталог src не найден в ${repo_root}."
             return 1
         fi
         log "Сборка локального дерева: $src_dir"
@@ -185,6 +256,8 @@ start_setup() {
 
 start_remove() {
     local ver
+
+    confirm "Удалить регистрацию DKMS amneziawg?" || return 1
 
     ver="$(dkms status -m amneziawg 2>/dev/null | awk -F'[/, ]+' '{print $2}' | head -n1)"
     if [ -n "$ver" ]; then
@@ -253,6 +326,7 @@ while [ "$#" -gt 0 ]; do
             MOD_BRANCH="$1"
             ;;
         -l|--local)       LOCAL_BUILD=1 ;;
+        -y|--yes)         NONINTERACTIVE=1 ;;
         -h|--help)        show_help; exit 0 ;;
         *)                err "Неизвестный аргумент: $1"; show_help; exit 1 ;;
     esac
@@ -267,7 +341,7 @@ esac
 [ "$(id -u)" -eq 0 ] || { err "Запускайте от root."; exit 1; }
 
 case "$ACTION" in
-    deps)      install_deps;      exit $? ;;
+    deps)      check_os || exit $?; install_deps;  exit $? ;;
     rmdeps)    remove_deps;       exit $? ;;
     setup)     start_setup;       exit $? ;;
     addawg)    add_awg_to_modules; exit $? ;;
