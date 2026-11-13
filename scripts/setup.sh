@@ -116,6 +116,17 @@ install_deps() {
     local pkgs=(dkms gcc make git tar gzip which curl)
 
     log "Установка зависимостей: ${pkgs[*]}"
+    if dnf install -y "${pkgs[@]}"; then
+        log "Зависимости установлены."
+        return 0
+    fi
+
+    # dkms в EL10 поставляется только из EPEL: в чистом образе репозиторий
+    # не подключён, поэтому повторяем установку после включения EPEL и CRB.
+    warn "Не удалось установить зависимости, включаю EPEL и CRB и повторяю."
+    dnf install -y dnf-plugins-core epel-release || true
+    dnf config-manager --set-enabled crb || true
+    dnf makecache || true
     dnf install -y "${pkgs[@]}" || {
         err "Не удалось установить зависимости."
         return 1

@@ -64,6 +64,8 @@ on:
 permissions:
   contents: write
   issues: write
+  # Нужен для чтения приватного пакета GHCR, если образ centos-10 не публичный.
+  packages: read
 
 env:
   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
@@ -76,7 +78,12 @@ jobs:
   merge:
     runs-on: ubuntu-24.04
     container:
-      image: quay.io/centos/centos:stream10
+      # Готовый CI-образ из build-ci-image.yml: CRB и EPEL уже включены,
+      # базовые инструменты (git, make, curl, tar, gzip) предустановлены.
+      image: ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
       options: --privileged
     defaults:
       run:
@@ -141,10 +148,20 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "upstream_ref=$upstream_ref kernel_version=${kernel_version:-latest} vds_branch=$vds_branch dry_run=$dry_run"
 
-      - name: Install bootstrap tools
+      - name: Verify CI image tooling
         run: |
           set -euo pipefail
-          dnf install -y git tar gzip which
+          # Образ centos-10:lts собирается через build-ci-image.yml и обязан содержать
+          # эти инструменты; установка базовых пакетов в рантайме больше не нужна.
+          missing=""
+          for tool in git make curl tar gzip base64 awk sed; do
+            command -v "$tool" >/dev/null 2>&1 || missing="${missing} ${tool}"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::CI image is missing tools:${missing}"
+            exit 1
+          fi
+          echo "CI image tooling verified: git make curl tar gzip base64 awk sed"
 
       - name: Checkout VDS
         env:

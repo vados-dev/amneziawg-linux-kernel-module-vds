@@ -5,7 +5,7 @@ FROM ${CI_BASE_IMAGE}
 # Пустая строка или "false" означают «не устанавливать».
 ARG WIDTH_KERNEL=""
 ARG WIDTH_DKMS=false
-ARG WIDTH_BASE_PACKAGES="mc git make curl wget libmnl-devel pkgconf fail2ban firewalld firewalld-filesystem nftables python3 python3-pip python3-virtualenv qrencode"
+ARG WIDTH_BASE_PACKAGES="mc git make curl wget libmnl-devel pkgconf fail2ban firewalld firewalld-filesystem nftables python3 python3-pip qrencode"
 
 LABEL maintainer="vados-dev"
 LABEL com.docker.compose.service="amneziawg-ci-runner"
