@@ -87,11 +87,12 @@
 
 Основание: постановка владельца — использовать для `merge.yml` готовый образ
 `ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts`.
-План — `04-plans.md`, Phase E. Ожидает подтверждения владельцем.
+План — `04-plans.md`, Phase E. Реализовано 13.11.2026 23:59 MSK,
+отчёт — `.agents/logs/20261113235948-reports.md`.
 
-1. [ ] Перевести job `merge` на CI-образ GHCR, добавить `packages: read` и credentials.
-2. [ ] Заменить `Install bootstrap tools` на проверку инструментов образа.
-3. [ ] Добавить в `scripts/setup.sh` fallback с включением EPEL/CRB при установке `dkms`.
+1. [x] Перевести job `merge` на CI-образ GHCR, добавить `packages: read` и credentials.
+2. [x] Заменить `Install bootstrap tools` на проверку инструментов образа.
+3. [x] Добавить в `scripts/setup.sh` fallback с включением EPEL/CRB при установке `dkms`.
 4. [ ] Проверка: dry-run `merge.yml` владельцем (правило 7).
 
 ## Отработано
