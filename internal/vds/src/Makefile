@@ -2,8 +2,11 @@
 #
 # Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
 
-VDS_GITHUB_VERSION := $(shell git log -1 --format='3.1.%cd-vds' --date=format:'%Y%m%d' 2>/dev/null || echo 3.1.0-vds)
-WIREGUARD_VERSION := $(VDS_GITHUB_VERSION)
+# Единственный источник версии — version.h (правило 9 в .agents/02-rules.md).
+WIREGUARD_VERSION := $(shell sed -n 's/^[[:space:]]*#define[[:space:]]\{1,\}WIREGUARD_VERSION[[:space:]]\{1,\}"\(.*\)"/\1/p' version.h 2>/dev/null | head -n1)
+ifeq ($(strip $(WIREGUARD_VERSION)),)
+$(error WIREGUARD_VERSION is not defined in version.h)
+endif
 OMIT_ENDPOINTS ?=
 
 KERNELRELEASE ?= $(shell uname -r)
