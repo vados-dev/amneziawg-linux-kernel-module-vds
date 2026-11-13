@@ -47,3 +47,14 @@
 - check-upstream.yml должен запускать merge.yml, либо вручную, сам merge.yml не должен запускаться автоматически.
 - merge.yml должен запускать stable.yml и ждать пока тот не отработает корректно, если не отработал корректно, merge.yml завершается.
   Сам stable.yml не должен запускаться автоматически и даже вручную, он как часть merge.yml.
+
+### 13.11.2026 12:18 MSK
+- Telegram: секреты лежат в Repository secrets под именами `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID`.
+- В шагах используются короткие переменные `TG_TOKEN` и `TG_CHAT_ID`, объявленные на уровне job:
+  `TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}`, `TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}`.
+- Блок `environment: telegram` убран из всех job: Repository secrets доступны без окружения,
+  а отсутствующее окружение давало пустые значения в логе `131120261351-merge.yml.log:106-107`.
+- Контекст `secrets` недоступен в `env` на уровне workflow — только на уровне job/step,
+  поэтому env вынесен в job, а не в корень файла.
+- При отсутствии секретов шаг печатает `::warning::` с именами проверенных секретов вместо
+  молчаливого `exit 0`.
