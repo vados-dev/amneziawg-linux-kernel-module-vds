@@ -74,3 +74,27 @@
 - `TG_TOKEN`/`TG_CHAT_ID` перенесены из job-level `env` в `env:` конкретных шагов отправки.
 - Блоки `secrets:` с `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` удалены из `workflow_call`.
 - `TELEGRAM_NOTIFY` удалён полностью: управление только через новые флаги.
+
+### 13.11.2026 16:15 MSK
+Прогон `131120261554` (`check-upstream.yml`, лог
+`.agents/logs/debug/131120261554-check-upstream.yml.log`) отправил два Telegram-сообщения
+об одном событии:
+- 12:52:30 — «Upstream v3.1.20261113-02 released. merge.yml was not started» (`:213-232`);
+- 12:52:34 — «check-upstream: success» (`:233-253`).
+
+Оба флага разрешились в `true` (лог `:53-54`); из лога нельзя понять, пришли они из dispatch
+или из repo variable, потому что имя инпута и имя env совпадают.
+
+Причины:
+- `NOTIFY_ON_UPDATE` управлял не уведомлением, а запретом автозапуска `merge.yml`; в `merge.yml`
+  тот же флаг означал другое, в `stable.yml` не использовался вообще;
+- `inputs.X || vars.X == 'true'` не позволяет выключить флаг из dispatch: boolean всегда определён
+  и default `false` неотличим от «не задано»;
+- `-F NOTIFY_ON_UPDATE` в шаге запуска merge выполнялся только при `!= 'true'`, то есть всегда
+  передавал `false`;
+- при `in_sync=true` итоговое сообщение уходило даже без изменений — шум при включении `schedule`.
+
+Решение (Вариант A): единый `notify_mode` (`choice` в `workflow_dispatch`, `string` в
+`workflow_call`) со значениями `none|inherit|changes|always`, отдельный `auto_merge` вместо
+инвертированного `NOTIFY_ON_UPDATE`, kill-switch `vars.TELEGRAM_NOTIFY`, один шаг уведомления
+на прогон.
