@@ -49,9 +49,9 @@ amneziawg-linux-kernel-module-vds (далее VDS) — это форк [amneziaw
 origin→ amnezia-vpn/amneziawg-linux-kernel-module (upstream)
 gh→ vados-dev/amneziawg-linux-kernel-module-vds
 
-Активная upstream ветка: в internal/branch.
-Активная upstream версия: в internal/version.
-Текущая версия VDS: в internal/current (записывается туда после успешного слияния и выполнения команды make print-version).
+Активная upstream ветка: в internal/config/upstream.
+Активная upstream версия: в internal/config/version.
+Текущая версия VDS: в internal/config/current (записывается туда после успешного слияния и записи в бранч master).
 
 ### В настоящее время в VDS исправлено
 - В src/compat/compat.h, чтобы исправить ошибку при сборке и установке с помощью DKMS.
