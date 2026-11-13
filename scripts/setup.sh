@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
 
-set -uo pipefail
+#set -uo pipefail
+set -e -o pipefail
+shopt -s extglob
+export LC_ALL=C
 
 # Common vars
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
-cur_dir="${SELF%/*}"
-repo_root="$(cd "${cur_dir}/.." && pwd)"
+SELF_DIR="$(dirname "${SELF}")"
+export PATH="${SELF_DIR}:$PATH"
+ME_SELF="${SELF##*/}"
+ME_CLEAN="${ME_SELF%.*}"
+PROGRAM="${0##*/:-$ME_CLEAN}"
+ARGS=( "$@" )
+echo $ME_CLEAN
+exit 0
+PARENT_DIR="$(dirname "${SELF_DIR}")"
+repo_root="$(cd "${PARENT_DIR}" && pwd)"
 
 amf="/etc/modules-load.d/amneziawg.conf"
 wmf="/etc/modules-load.d/wireguard.conf"
@@ -17,7 +28,7 @@ mod_repo="amneziawg-linux-kernel-module-vds"
 #mod_repo="amneziawg-linux-kernel-module"
 mod_branch="master"
 
-setup_tmp="${cur_dir}/${mod_repo}-${mod_tmp_ver}"
+setup_tmp="${ME_CLEAN}/${mod_repo}-${mod_tmp_ver}"
 
 # State
 ACTION=""
@@ -26,9 +37,44 @@ MOD_BRANCH="${mod_branch}"
 LOCAL_BUILD=0
 NONINTERACTIVE=0
 
-log()  { printf 'INFO: %s\n' "$*"; }
-warn() { printf 'WARN: %s\n' "$*" >&2; }
-err()  { printf 'ERROR: %s\n' "$*" >&2; }
+# Common functions
+cmd()  { printf '  [\033[1;33m✨\033[0m]\033[1m %s \033[0m\n' "$*" >&2; "$@"; }
+log()  { printf ' \033[1;34m 📋 INFO:\033[0;8m [%s] - %s.\033[0m\n' "$PROGRAM" "$*"; }
+warn() { printf ' \033[1;33m ⚡ WARN:\033[0;1m [%s] - %s.\033[0m\n' "$PROGRAM" "$*" >&2; }
+err()  { printf ' \033[0;31m ⚫ ERROR:\033[0;1m [%s] - %s!\033[0m\n' "$PROGRAM" "$*" >&2; }
+die()  { printf ' \033[1;31m ❌ CRITICAL:\033[0;1m [%s] - %s!\033[0m\n' "$PROGRAM" "$*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "Run as root!"
+
+confirm() { local answer; read -r -p "$(cecho sW "    $1 [y/N]: ")" answer; [[ "$answer" =~ ^[Yy]$ ]] || return 1; }
+
+#-> version_ge A B -> 0, если версия A >= B. Сравнение почленное
+version_ge() {
+    local a="$1" b="$2"
+    [[ "$a" == "$b" ]] && return 0
+    local -a pa pb; IFS='.' read -ra pa <<<"$a"; IFS='.' read -ra pb <<<"$b"
+    local i
+    for ((i = 0; i < ${#pb[@]}; i++)); do
+        local x="${pa[i]:-0}" y="${pb[i]:-0}"
+        ((10#${x:-0} > 10#${y:-0})) && return 0
+        ((10#${x:-0} < 10#${y:-0})) && return 1
+    done
+    return 0
+}
+
+check_os() { [[ -r /etc/os-release ]] && source "/etc/os-release"; os_id="$ID"; os_ver="$VERSION_ID" || { echo "Нет /etc/os-release!"; exit 1; }; }
+validate_os_ver() {
+    check_os
+    case "$os_id" in
+        "ubuntu") version_ge "$os_ver" "22.04" && os_type="deb"  || die "Ubuntu ${os_ver}: проверялось на 24.04+!" ;;
+        "debian") version_ge "$os_ver" "12"    && os_type="deb"  || die "Debian ${os_ver}: проверялось на 12+!" ;;
+        "almalinux") version_ge "$os_ver" "9"  && os_type="rhel" || die "Almalinux ${os_ver}: проверялось на 9+!" ;;
+        "rocky") version_ge "$os_ver" "9"      && os_type="rhel" || die "Rocky ${os_ver}: проверялось на 9+!" ;;
+        "centos") version_ge "$os_ver" "9"     && os_type="rhel" || die "CentOS ${os_ver}: проверялось на 9+!" ;;
+        *) die "ОС '${os_ver}' не проверялась; ожидается Ubuntu 24.04+ / Debian 12+ / Almalinux 9+ / Rocky 9+ / Centos 9+." ;;
+    esac #    print_ok "ОС: ${os_id} ${os_ver}, Тип ОС: ${os_type}"
+}
+
 
 show_help() {
     cat << 'EOF'
@@ -112,7 +158,44 @@ check_os() {
     log "ОС: ${os_id} ${os_ver}."
 }
 
+CHECK_PKGS="amneziawg-tools amneziawg-dkms mc git make curl wget libmnl-dev pkg-config fail2ban firewalld firewalld-filesystem nftables python3 python3-pip pythov-venv qrencode)
+# kernel-headers-$(uname -r) kernel-devel-$(uname -r) 
+
+
+check_dnf_updates() { dnf check-update -y > /dev/null 2>&1 || true; }
+
+install_dnf_repos() {
+    dnf config-manager --enable crb || true
+    dnf install -y epel-release || true
+    dnf config-manager --enable epel-release || true
+    dnf copr enable -y tigro/amneziawg centos-stream-${os_ver}-$(arch)
+    dnf clean all || true
+    dnf makecache || true
+}
+
+#-> Функция проверки зависимостей от vados-dev в стиле dnf:
+check_deps() {
+    local packages=("$@")
+    local to_install=()
+    local deps_pkg
+    log "Список: ${packages[*]}"
+    for deps_pkg in "${packages[@]}"; do
+        if ! dnf list installed "$deps_pkg" 2>/dev/null | grep -q "Installed Packages"; then
+             to_install+=("$deps_pkg")
+        fi
+    done
+        if [ ${#to_install[@]} -eq 0 ]; then
+            log "Все зависимости установлены."; return 0
+        else
+            log "Установка: ${to_install[*]}..."
+            dnf install -y ${to_install[*]} > /dev/null 2>&1 && log "Зависимости установлены." || die "Ошибка установки зависимостей!"
+        fi
+}
+
 install_deps() {
+    if [[ "$os_type" == "rhel" ]]; then
+        local deps=()
+        deps="${CHECK_PKGS}"
     local pkgs=(dkms gcc make git tar gzip which curl)
 
     log "Установка зависимостей: ${pkgs[*]}"
