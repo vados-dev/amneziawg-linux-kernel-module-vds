@@ -42,3 +42,10 @@
     - Файлы в корне ветки master тоже не трогаем, с ними работаем только внутри ветки master, при условии,
       что в upstream ничего критичного не появилось/изменилось, в противном случае присылаем уведомление в telegram боте
       с подробным описанием изменений.
+
+12. Уведомления Telegram управляются единым `notify_mode` (`none|inherit|changes|always`,
+    default `none`) и глобальным kill-switch `vars.TELEGRAM_NOTIFY`. `none` и `inherit`
+    означают «действует `vars.NOTIFY_MODE`» (при пустом значении — `changes`), `changes`
+    и `always` переопределяют env. Один прогон — не более одного сообщения. Автозапуск
+    `merge.yml` управляется отдельным `auto_merge`, а не флагом уведомлений. Имена инпутов —
+    lowercase snake_case, резолвнутые значения — UPPERCASE `env`.
