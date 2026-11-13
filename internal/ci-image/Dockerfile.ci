@@ -8,13 +8,23 @@ LABEL com.docker.compose.project="amneziawg-ci"
 RUN set -eux; dnf -y update || true
 RUN set -eux; dnf -y install dnf-plugins-core || true
 RUN set -eux; dnf config-manager --set-enabled crb || true
+RUN set -eux; dnf -y install epel-release || true ; dnf check-update -y > /dev/null 2>&1 || true ;
+#
+RUN set -eux; dnf copr enable -y tigro/amneziawg centos-stream-${os_ver}-$(arch)
+    dnf clean all || true
+    dnf makecache || true
 
-RUN set -eux; dnf -y install epel-release || true
 RUN set -eux; dnf -y update || true
+
+# Пока не удаляй этот блок:
 #RUN set -eux; dnf -y install rpm-build rpmdevtools rpm-sign redhat-rpm-config gcc make curl mc \
 # wget git gnupg2 cpio systemd createrepo_c pkgconf-pkg-config jq which krb5-devel rust cargo clang \
 # zlib-devel pcre2-devel openssl-devel gd-devel libxslt-devel perl-devel perl-ExtUtils-Embed perl-macros \
 # cmark-devel mercurial libedit-devel libmaxminddb-devel cmake re2-devel c-ares-devel grpc-devel protobuf && dnf clean all ;
+
+# Тут я при отладке доделаю сам:
+RUN set -eux; dnf -y install kernel-headers-$(uname -r) kernel-devel-$(uname -r) amneziawg-tools amneziawg-dkms amneziawg-tools mc \
+git make curl wget libmnl-dev pkg-config fail2ban firewalld firewalld-filesystem nftables python3 python3-pip pythov-venv qrencode ;
 
 COPY internal/ci-image/mc.tar.gz /tmp/mc.tar.gz
 RUN set -eux; \
