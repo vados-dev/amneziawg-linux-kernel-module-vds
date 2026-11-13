@@ -42,7 +42,7 @@
    - [x] Создание issue с checklist миграции VDS; уведомление в telegram при сбое.
    - [x] Нормализация тега: `v`-префикс и «голый» тег сравниваются одинаково.
    - [x] В тексте issue используется `upstream_ref`; ручной запуск `stable.yml` удалён.
-   - [x] Добавлены `TELEGRAM_NOTIFY` и env `TG_TOKEN`/`TG_CHAT_ID` на уровне job из Repository secrets.
+   - [x] Добавлены inputs `NOTIFY_ON_UPDATE`/`NOTIFY_ON_RESULT` и env `TG_TOKEN`/`TG_CHAT_ID` в шагах из Repository secrets.
    - [x] `merge.yml` запускается по флагу `run_merge` и только при найденном новом теге.
    - [x] Автоматические триггеры закомментированы; `workflow_dispatch` оставлен для
      ручного запуска владельцем.
@@ -67,7 +67,7 @@
    - [x] Версия берётся из тега или из `src/version.h` upstream, а не из имени ветки.
    - [x] Токен не сохраняется в `.git/config`.
    - [x] Runner закреплён: `ubuntu-24.04`.
-   - [x] Добавлены `TELEGRAM_NOTIFY` и env `TG_TOKEN`/`TG_CHAT_ID` из Repository secrets.
+   - [x] Добавлены inputs `NOTIFY_ON_UPDATE`/`NOTIFY_ON_RESULT` и env `TG_TOKEN`/`TG_CHAT_ID` в шагах из Repository secrets.
 
 5. [-] Написать `.github/workflows/stable.yml` с учётом целей, планов и задач проекта.
    - [x] Тег вида `v$(cat internal/config/current)`, например `v3.1.20260812-vds`.
@@ -75,11 +75,11 @@
    - [x] Единственный вход — `workflow_call`; `workflow_dispatch` и `workflow_run` убраны.
    - [x] Проверка успешного завершения `merge.yml` — через зависимость job.
    - [x] Ветка `stable` создаётся явно из исходной ветки `master`.
-   - [x] Runner закреплён, добавлены `TELEGRAM_NOTIFY` и env `TG_TOKEN`/`TG_CHAT_ID` из Repository secrets.
+   - [x] Runner закреплён, добавлены inputs `NOTIFY_ON_UPDATE`/`NOTIFY_ON_RESULT` и env `TG_TOKEN`/`TG_CHAT_ID` в шагах.
 
-6. [-] Telegram-уведомления: переменная `TELEGRAM_NOTIFY: true|false`, Repository secrets
-   `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` → env `TG_TOKEN`/`TG_CHAT_ID` на уровне job,
-   единый формат сообщений во всех трёх workflows. Ожидает проверки запуском.
+6. [-] Telegram-уведомления: inputs `NOTIFY_ON_UPDATE`/`NOTIFY_ON_RESULT` (default `false`),
+   Repository secrets `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` → env `TG_TOKEN`/`TG_CHAT_ID`
+   в шагах, приоритет `true` из inputs выше унаследованных значений. Ожидает проверки запуском.
 
 ## Отработано
 
