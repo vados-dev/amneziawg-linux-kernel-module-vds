@@ -1,7 +1,7 @@
 ARG CI_BASE_IMAGE=quay.io/centos/centos:stream10
 FROM ${CI_BASE_IMAGE}
 
-LABEL maintainer="AmsterdamNL"
+LABEL maintainer="vados-dev"
 #LABEL com.docker.compose.service="nginx-ci-runner"
 #LABEL com.docker.compose.project="nginx-ci"
 
