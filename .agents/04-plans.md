@@ -156,7 +156,8 @@ flowchart TD
 
 ## Phase E: merge.yml во временном CI-образе
 
-Статус: план, ожидает подтверждения владельцем (13.11.2026 23:50 MSK).
+Статус: реализовано 13.11.2026 23:59 MSK, ожидает проверки запуском владельцем.
+Отчёт — `.agents/logs/20261113235948-reports.md`.
 Основание: постановка владельца — образ
 `ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts` уже собран,
 и лог `.agents/logs/debug/131120261625-merge.yml.log:495-503`
