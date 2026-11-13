@@ -122,7 +122,6 @@ check_deps() {
 
 install_deps() {
     if [[ "$os_type" == "rhel" ]]; then
-        export ccflags-y += -Wno-redundant-decls
         local deps=()
         deps=(kernel-headers-$(uname -r) kernel-devel-$(uname -r) amneziawg-tools amneziawg-dkms amneziawg-tools mc git make curl wget libmnl-dev pkg-config fail2ban firewalld firewalld-filesystem nftables python3 python3-pip pythov-venv qrencode)
         confirm "Установить репозитории?" "y" && install_dnf_repos        
