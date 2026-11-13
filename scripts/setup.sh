@@ -13,7 +13,7 @@ ME_SELF="${SELF##*/}"
 ME_CLEAN="${ME_SELF%.*}"
 PROGRAM="${0##*/:-$ME_CLEAN}"
 ARGS=( "$@" )
-echo $ME_SELF
+echo $SELF_DIR
 exit 0
 PARENT_DIR="$(dirname "${SELF_DIR}")"
 repo_root="$(cd "${PARENT_DIR}" && pwd)"
