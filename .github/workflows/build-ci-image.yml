@@ -4,6 +4,11 @@ permissions:
   contents: read
   packages: write
 
+# Две одновременные сборки вычислили бы одинаковый следующий тег.
+concurrency:
+  group: build-ci-image-${{ inputs.image_name }}
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -16,12 +21,12 @@ on:
           - build
           - delete
       dockerfile:
-        description: "Dockerfile in location docker/ci-images/"
+        description: "Dockerfile in location internal/ci-image/"
         required: true
-        default: "Dockerfile.rpm"
+        default: "Dockerfile.ci"
         type: string
       base_image:
-        description: "Base image"
+        description: "Base image (passed to Dockerfile as CI_BASE_IMAGE)"
         required: true
         default: "quay.io/centos/centos:stream10"
         type: string
@@ -35,11 +40,21 @@ on:
         required: true
         default: "centos-10"
         type: string
-      width_otel:
-        description: "Install dependencies for otel module"
-        required: true
-        default: true
+      width_kernel:
+        description: "Kernel version for kernel-devel/kernel-headers (empty = skip)"
+        required: false
+        default: ""
+        type: string
+      width_dkms:
+        description: "Install amneziawg-dkms from copr (true/false)"
+        required: false
+        default: false
         type: boolean
+      width_base_packages:
+        description: "Space separated package list for dnf install (CentOS Stream names, empty = skip)"
+        required: false
+        default: "mc git make curl wget libmnl-devel pkgconf fail2ban firewalld firewalld-filesystem nftables python3 python3-pip python3-virtualenv qrencode"
+        type: string
       delete_tags:
         description: "Delete mode: space/comma separated tags (e.g. v0.0.1b,sha-abc123)"
         required: false
@@ -50,6 +65,7 @@ jobs:
   build-and-push:
     if: ${{ inputs.operation == 'build' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     outputs:
       image_ref: ${{ steps.meta.outputs.image_ref }}
       image_ref_sha: ${{ steps.meta.outputs.image_ref_sha }}
@@ -58,7 +74,7 @@ jobs:
       sha_tag: ${{ steps.meta.outputs.sha_tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set image metadata
         id: meta
@@ -69,7 +85,8 @@ jobs:
           CI_IMAGE_VER: ${{ vars.CI_IMAGE_VER || '' }}
         run: |
           set -euo pipefail
-          repo_lc="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+
+          repo_lc="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           image="ghcr.io/${repo_lc}/${CI_IMAGE_NAME}"
 
           next_tag() {
@@ -96,99 +113,121 @@ jobs:
 
           base_numeric_tag="$(sed -E 's/^(v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}).*/\1/' <<< "${CI_IMAGE_VER}")"
           if [[ ! "${base_numeric_tag}" =~ ^v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
-            # First run or malformed variable fallback: generate v0.0.1.
+            # Первый запуск или испорченная переменная: следующий тег будет v0.0.1.
             base_numeric_tag="v0.0.0"
           fi
 
-          # Discover latest numeric tag from existing GHCR image versions.
-          owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          repo_name="${GITHUB_REPOSITORY#*/}"
-          package_name="${repo_name}/${CI_IMAGE_NAME}"
+          # Пакет GHCR принадлежит либо организации, либо пользователю:
+          # /users/{owner}/packages/... для организации всегда отдаёт 404.
+          owner_lc="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo_name_lc="$(printf '%s' "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
+          package_name="${repo_name_lc}/${CI_IMAGE_NAME}"
           package_name_enc="${package_name//\//%2F}"
-          tags_json="$(gh api -H "Accept: application/vnd.github+json" "/users/${owner_lc}/packages/container/${package_name_enc}/versions?per_page=100" 2>/dev/null || echo '[]')"
+
+          existing_tags=""
+          pkg_ok=false
+          for scope in "orgs/${owner_lc}" "users/${owner_lc}"; do
+            if existing_tags="$(
+              gh api --paginate -H "Accept: application/vnd.github+json" \
+                "/${scope}/packages/container/${package_name_enc}/versions?per_page=100" \
+                --jq '.[]? | (.metadata.container.tags // [])[]' 2>/dev/null
+            )"; then
+              pkg_ok=true
+              break
+            fi
+            existing_tags=""
+          done
+          if [[ "${pkg_ok}" != "true" ]]; then
+            echo "::warning::Cannot read GHCR package ${package_name}; numbering restarts from ${base_numeric_tag}"
+          fi
+
           latest_registry_numeric_tag="$(
-            jq -r '
-              [
-                .[]?
-                | (.metadata.container.tags // [])[]
-                | capture("^(?<n>v[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,2})").n
-              ] | unique | .[]
-            ' <<< "${tags_json}" 2>/dev/null | sort -V | tail -n1
+            printf '%s\n' "${existing_tags}" \
+              | grep -Eo '^v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}' \
+              | sort -V | tail -n1 || true
           )"
-          if [[ "${latest_registry_numeric_tag:-}" =~ ^v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]; then
+          if [[ -n "${latest_registry_numeric_tag}" ]]; then
             highest_numeric_tag="$(printf '%s\n%s\n' "${base_numeric_tag}" "${latest_registry_numeric_tag}" | sort -V | tail -n1)"
           else
             highest_numeric_tag="${base_numeric_tag}"
           fi
 
           tag="$(next_tag "${highest_numeric_tag}")"
-          tag_sanitized="$(echo "${tag}" | tr '/:@ ' '-' | tr -cd 'a-zA-Z0-9._-')"
-          echo "image=${image}" >> "${GITHUB_OUTPUT}"
-          echo "tag=${tag_sanitized}" >> "${GITHUB_OUTPUT}"
-          echo "sha_tag=sha-${GITHUB_SHA::12}" >> "${GITHUB_OUTPUT}"
-          echo "image_ref=${image}:${tag_sanitized}" >> "${GITHUB_OUTPUT}"
-          echo "image_ref_sha=${image}:sha-${GITHUB_SHA::12}" >> "${GITHUB_OUTPUT}"
+          tag_sanitized="$(printf '%s' "${tag}" | tr '/:@ ' '-' | tr -cd 'a-zA-Z0-9._-')"
+          sha_tag="sha-${GITHUB_SHA:0:12}"
 
-#      - name: Set up QEMU
-#        uses: docker/setup-qemu-action@v4
+          {
+            printf 'image=%s\n' "${image}"
+            printf 'tag=%s\n' "${tag_sanitized}"
+            printf 'sha_tag=%s\n' "${sha_tag}"
+            printf 'image_ref=%s\n' "${image}:${tag_sanitized}"
+            printf 'image_ref_sha=%s\n' "${image}:${sha_tag}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "Resolved ${image}:${tag_sanitized} (sha tag: ${sha_tag})"
+
+      # Нужен для платформ, отличных от linux/amd64.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
-          build-contexts: |
-            imagefile=docker-image://${{ inputs.base_image }}
           build-args: |
-            WIDTH_OTEL=${{ inputs.width_otel }}
+            CI_BASE_IMAGE=${{ inputs.base_image }}
+            WIDTH_KERNEL=${{ inputs.width_kernel }}
+            WIDTH_DKMS=${{ inputs.width_dkms }}
+            WIDTH_BASE_PACKAGES=${{ inputs.width_base_packages }}
           context: .
-          file: docker/ci-images/${{ inputs.dockerfile }}
+          file: internal/ci-image/${{ inputs.dockerfile }}
           platforms: ${{ inputs.build_platforms }}
           push: true
           tags: |
-            ${{ steps.meta.outputs.tags }}
-          annotations: ${{ steps.meta.outputs.annotations }}           
-
-#                      ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}
-
-#          meta-images: ${CI_IMAGE_NAME}
-#          meta-tags: |
-#                type=ref,event=branch
-#                type=ref,event=pr
-#                type=semver,pattern={{version}}
-#                type=semver,pattern={{major}}.{{minor}}
+            ${{ steps.meta.outputs.image_ref }}
+            ${{ steps.meta.outputs.image_ref_sha }}
 
       - name: Push latest/lts tags
         shell: bash
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          SHA_TAG: ${{ steps.meta.outputs.sha_tag }}
         run: |
           set -euo pipefail
           docker buildx imagetools create \
-            -t "${{ steps.meta.outputs.image }}:latest" \
-            -t "${{ steps.meta.outputs.image }}:lts" \
-            "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}"
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:lts" \
+            "${IMAGE}:${SHA_TAG}"
 
       - name: Save image metadata
         shell: bash
+        env:
+          CI_IMAGE: ${{ steps.meta.outputs.image }}
+          CI_IMAGE_TAG: ${{ steps.meta.outputs.tag }}
+          CI_IMAGE_SHA_TAG: ${{ steps.meta.outputs.sha_tag }}
+          CI_IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
+          CI_IMAGE_REF_SHA: ${{ steps.meta.outputs.image_ref_sha }}
         run: |
           set -euo pipefail
-          cat > ci-image.env <<EOF
-          CI_IMAGE=${{ steps.meta.outputs.image }}
-          CI_IMAGE_TAG=${{ steps.meta.outputs.tag }}
-          CI_IMAGE_SHA_TAG=${{ steps.meta.outputs.sha_tag }}
-          CI_IMAGE_REF=${{ steps.meta.outputs.image_ref }}
-          CI_IMAGE_REF_SHA=${{ steps.meta.outputs.image_ref_sha }}
-          EOF
+          {
+            printf 'CI_IMAGE=%s\n' "${CI_IMAGE}"
+            printf 'CI_IMAGE_TAG=%s\n' "${CI_IMAGE_TAG}"
+            printf 'CI_IMAGE_SHA_TAG=%s\n' "${CI_IMAGE_SHA_TAG}"
+            printf 'CI_IMAGE_REF=%s\n' "${CI_IMAGE_REF}"
+            printf 'CI_IMAGE_REF_SHA=%s\n' "${CI_IMAGE_REF_SHA}"
+          } > ci-image.env
+          cat ci-image.env
 
       - name: Upload image metadata artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: ci-image-metadata
           path: ci-image.env
@@ -196,59 +235,111 @@ jobs:
 
       - name: Write summary
         shell: bash
+        env:
+          CI_IMAGE: ${{ steps.meta.outputs.image }}
+          CI_IMAGE_TAG: ${{ steps.meta.outputs.tag }}
+          CI_IMAGE_SHA_TAG: ${{ steps.meta.outputs.sha_tag }}
+          CI_IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
+          CI_IMAGE_REF_SHA: ${{ steps.meta.outputs.image_ref_sha }}
         run: |
+          set -euo pipefail
           {
             echo "### CI image metadata"
             echo
-            echo "- image: \`${{ steps.meta.outputs.image }}\`"
-            echo "- tag: \`${{ steps.meta.outputs.tag }}\`"
-            echo "- sha tag: \`${{ steps.meta.outputs.sha_tag }}\`"
-            echo "- image ref: \`${{ steps.meta.outputs.image_ref }}\`"
-            echo "- image ref sha: \`${{ steps.meta.outputs.image_ref_sha }}\`"
+            echo "- image: \`${CI_IMAGE}\`"
+            echo "- tag: \`${CI_IMAGE_TAG}\`"
+            echo "- sha tag: \`${CI_IMAGE_SHA_TAG}\`"
+            echo "- image ref: \`${CI_IMAGE_REF}\`"
+            echo "- image ref sha: \`${CI_IMAGE_REF_SHA}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Print usage hint
         shell: bash
+        env:
+          CI_IMAGE: ${{ steps.meta.outputs.image }}
+          CI_IMAGE_TAG: ${{ steps.meta.outputs.tag }}
+          CI_IMAGE_SHA_TAG: ${{ steps.meta.outputs.sha_tag }}
         run: |
+          set -euo pipefail
           echo "Use this image in workflows:"
-          echo "  ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
-          echo "  ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}"
-          echo "  ${{ steps.meta.outputs.image }}:latest"
-          echo "  ${{ steps.meta.outputs.image }}:lts"
+          echo "  ${CI_IMAGE}:${CI_IMAGE_TAG}"
+          echo "  ${CI_IMAGE}:${CI_IMAGE_SHA_TAG}"
+          echo "  ${CI_IMAGE}:latest"
+          echo "  ${CI_IMAGE}:lts"
 
   delete-image-tags:
     if: ${{ inputs.operation == 'delete' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Delete requested tags from GHCR package
         shell: bash
         env:
-          # secrets.amsternl тоже должен работать
-          GH_TOKEN: ${{ secrets.amsternl != '' && secrets.amsternl || github.token }}
+          # PAT владельца пакета (read:packages, delete:packages) либо штатный GITHUB_TOKEN.
+          GH_TOKEN: ${{ secrets.amsternl || github.token }}
           DELETE_TAGS: ${{ inputs.delete_tags }}
-          image_ci: ${{ steps.meta.outputs.image }}
+          CI_IMAGE_NAME: ${{ inputs.image_name }}
         run: |
           set -euo pipefail
-          if [[ -z "${DELETE_TAGS// }" ]]; then
-            echo "delete_tags is empty" >&2
+
+          tags="$(printf '%s' "${DELETE_TAGS}" | tr ',' '\n' | tr -d '[:space:]' | sed '/^$/d' | sort -u)"
+          if [[ -z "${tags}" ]]; then
+            echo "::error::delete_tags is empty"
             exit 1
           fi
 
-          owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          repo_name="${GITHUB_REPOSITORY#*/}"
-          package_name="${repo_name}/${image_ci}"
+          owner_lc="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo_name_lc="$(printf '%s' "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
+          package_name="${repo_name_lc}/${CI_IMAGE_NAME}"
           package_name_enc="${package_name//\//%2F}"
-          tags="$(echo "${DELETE_TAGS}" | tr ',' ' ' | xargs -n1 | sed '/^$/d' | sort -u)"
 
-          versions_json="$(gh api -H "Accept: application/vnd.github+json" "/users/${owner_lc}/packages/container/${package_name_enc}/versions?per_page=100")"
+          # Пакет может принадлежать организации или пользователю.
+          scope=""
+          versions_tsv=""
+          for candidate in "orgs/${owner_lc}" "users/${owner_lc}"; do
+            if versions_tsv="$(
+              gh api --paginate -H "Accept: application/vnd.github+json" \
+                "/${candidate}/packages/container/${package_name_enc}/versions?per_page=100" \
+                --jq '.[] | [.id, ((.metadata.container.tags // []) | join(","))] | @tsv' 2>/dev/null
+            )"; then
+              scope="${candidate}"
+              break
+            fi
+            versions_tsv=""
+          done
+          if [[ -z "${scope}" ]]; then
+            echo "::error::Cannot read GHCR package ${package_name} via orgs/ or users/ endpoints"
+            exit 1
+          fi
+
+          to_delete=""
+          missing=""
           for tag in ${tags}; do
-            ids="$(jq -r --arg t "${tag}" '.[] | select((.metadata.container.tags // []) | index($t)) | .id' <<< "${versions_json}")"
-            if [[ -z "${ids}" ]]; then
-              echo "Tag not found: ${tag}"
+            # shellcheck disable=SC2086
+            tag_ids="$(printf '%s\n' "${versions_tsv}" | awk -F'\t' -v t="${tag}" '{
+              n = split($2, a, ",")
+              for (i = 1; i <= n; i++) if (a[i] == t) { print $1; break }
+            }')"
+            if [[ -z "${tag_ids}" ]]; then
+              missing="${missing} ${tag}"
               continue
             fi
-            for id in ${ids}; do
-              echo "Deleting tag ${tag} via package version id ${id}"
-              gh api -X DELETE -H "Accept: application/vnd.github+json" "/users/${owner_lc}/packages/container/${package_name_enc}/versions/${id}"
-            done
+            to_delete="${to_delete}"$'\n'"${tag_ids}"
+          done
+
+          if [[ -n "${missing}" ]]; then
+            echo "::warning::Tags not found:${missing}"
+          fi
+
+          # Удаление версии снимает все её теги, поэтому id дедуплицируются.
+          ids_all="$(printf '%s\n' "${to_delete}" | sed '/^$/d' | sort -un)"
+          if [[ -z "${ids_all}" ]]; then
+            echo "::error::Nothing to delete"
+            exit 1
+          fi
+
+          for id in ${ids_all}; do
+            echo "Deleting package version id ${id}"
+            gh api -X DELETE -H "Accept: application/vnd.github+json" \
+              "/${scope}/packages/container/${package_name_enc}/versions/${id}"
           done

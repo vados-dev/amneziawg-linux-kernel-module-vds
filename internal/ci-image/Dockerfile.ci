@@ -1,6 +1,12 @@
 ARG CI_BASE_IMAGE=quay.io/centos/centos:stream10
 FROM ${CI_BASE_IMAGE}
 
+# Значения по умолчанию применяются, если build-arg не передан.
+# Пустая строка или "false" означают «не устанавливать».
+ARG WIDTH_KERNEL=""
+ARG WIDTH_DKMS=false
+ARG WIDTH_BASE_PACKAGES="mc git make curl wget libmnl-devel pkgconf fail2ban firewalld firewalld-filesystem nftables python3 python3-pip python3-virtualenv qrencode"
+
 LABEL maintainer="vados-dev"
 LABEL com.docker.compose.service="amneziawg-ci-runner"
 LABEL com.docker.compose.project="amneziawg-ci"
@@ -9,19 +15,29 @@ RUN set -eux; dnf check-update -y > /dev/null 2>&1 || true ;
 RUN set -eux; dnf -y install dnf-plugins-core || true
 RUN set -eux; dnf config-manager --set-enabled crb || true ; dnf check-update -y > /dev/null 2>&1 || true ;
 RUN set -eux; dnf -y install epel-release || true ; dnf check-update -y > /dev/null 2>&1 || true ;
-# Здесь надо подсунуть ${os_ver}-$(arch) я не помню на вскидку как
-RUN set -eux; dnf copr enable -y tigro/amneziawg centos-stream-${os_ver}-$(arch) || true ; dnf clean all || true ; dnf makecache || true
+
+# WIDTH_KERNEL — точная версия ядра, например 6.12.0-273.el10.x86_64.
+RUN if [ -n "$WIDTH_KERNEL" ] && [ "$WIDTH_KERNEL" != "false" ]; then \
+        set -eux; \
+        dnf -y install "kernel-headers-${WIDTH_KERNEL}" "kernel-devel-${WIDTH_KERNEL}" ; \
+    fi
+RUN if [ "$WIDTH_DKMS" = "true" ]; then \
+        set -eux; \
+        os_ver="$(rpm -E '%{rhel}' 2>/dev/null || true)"; \
+        case "$os_ver" in ''|*[!0-9]*) os_ver=10 ;; esac; \
+        arch="$(uname -m)"; \
+        dnf copr enable -y tigro/amneziawg "centos-stream-${os_ver}-${arch}" || true ; \
+        dnf clean all || true ; dnf makecache || true ; \
+        dnf -y install amneziawg-tools amneziawg-dkms ; \
+    fi
+
 RUN set -eux; dnf -y update || true
 
-# Пока не удаляй этот блок:
-#RUN set -eux; dnf -y install rpm-build rpmdevtools rpm-sign redhat-rpm-config gcc make curl mc \
-# wget git gnupg2 cpio systemd createrepo_c pkgconf-pkg-config jq which krb5-devel rust cargo clang \
-# zlib-devel pcre2-devel openssl-devel gd-devel libxslt-devel perl-devel perl-ExtUtils-Embed perl-macros \
-# cmark-devel mercurial libedit-devel libmaxminddb-devel cmake re2-devel c-ares-devel grpc-devel protobuf && dnf clean all ;
-
-# Тут я при отладке доделаю сам:
-RUN set -eux; dnf -y install kernel-headers-$(uname -r) kernel-devel-$(uname -r) amneziawg-tools amneziawg-dkms amneziawg-tools mc \
-git make curl wget libmnl-dev pkg-config fail2ban firewalld firewalld-filesystem nftables python3 python3-pip pythov-venv qrencode ;
+# Список пакетов передаётся через пробел, поэтому word splitting нужен намеренно.
+RUN if [ -n "$WIDTH_BASE_PACKAGES" ] && [ "$WIDTH_BASE_PACKAGES" != "false" ]; then \
+        set -eux; \
+        dnf -y install $WIDTH_BASE_PACKAGES ; \
+    fi
 
 COPY internal/ci-image/mc.tar.gz /tmp/mc.tar.gz
 RUN set -eux; \

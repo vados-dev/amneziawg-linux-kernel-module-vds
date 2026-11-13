@@ -123,7 +123,7 @@ check_deps() {
 install_deps() {
     if [[ "$os_type" == "rhel" ]]; then
         local deps=()
-        deps=(kernel-headers-$(uname -r) kernel-devel-$(uname -r) amneziawg-tools amneziawg-dkms amneziawg-tools mc git make curl wget libmnl-dev pkg-config fail2ban firewalld firewalld-filesystem nftables python3 python3-pip pythov-venv qrencode)
+        deps=(kernel-headers-$(uname -r) kernel-devel-$(uname -r) amneziawg-tools amneziawg-dkms mc git make curl wget libmnl-dev pkg-config fail2ban firewalld firewalld-filesystem nftables python3 python3-pip pythov-venv qrencode)
         confirm "Установить репозитории?" "y" && install_dnf_repos        
         confirm "Проверить обновления?" "y" && check_dnf_updates
         log "Проверка зависимостей: ${deps[@]}..."
