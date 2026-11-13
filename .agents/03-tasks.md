@@ -83,6 +83,17 @@
    один шаг уведомления на прогон. Repository secrets `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`
    → env `TG_TOKEN`/`TG_CHAT_ID` в шагах. Ожидает проверки запуском.
 
+### Workflows: CI-образ для merge.yml — 13.11.2026 23:50 MSK
+
+Основание: постановка владельца — использовать для `merge.yml` готовый образ
+`ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts`.
+План — `04-plans.md`, Phase E. Ожидает подтверждения владельцем.
+
+1. [ ] Перевести job `merge` на CI-образ GHCR, добавить `packages: read` и credentials.
+2. [ ] Заменить `Install bootstrap tools` на проверку инструментов образа.
+3. [ ] Добавить в `scripts/setup.sh` fallback с включением EPEL/CRB при установке `dkms`.
+4. [ ] Проверка: dry-run `merge.yml` владельцем (правило 7).
+
 ## Отработано
 
 Перенесено в `.agents/logs/202611131431-reports.md`, раздел 1.
