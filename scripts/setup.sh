@@ -47,8 +47,6 @@ die()  { printf ' \033[1;31m ❌ CRITICAL:\033[0;1m [%s] - %s!\033[0m\n' "$PROGR
 
 [ "$(id -u)" -eq 0 ] || die "Run as root!"
 
-confirm() { local answer; read -r -p "$(cecho sW "    $1 [y/N]: ")" answer; [[ "$answer" =~ ^[Yy]$ ]] || return 1; }
-
 #-> version_ge A B -> 0, если версия A >= B. Сравнение почленное
 version_ge() {
     local a="$1" b="$2"
@@ -63,6 +61,7 @@ version_ge() {
     return 0
 }
 
+# shellcheck disable=SC1091
 check_os() { [[ -r /etc/os-release ]] && source "/etc/os-release"; os_id="$ID"; os_ver="$VERSION_ID" || { echo "Нет /etc/os-release!"; exit 1; }; }
 validate_os_ver() {
     check_os
@@ -73,7 +72,8 @@ validate_os_ver() {
         "rocky") version_ge "$os_ver" "9"      && os_type="rhel" || die "Rocky ${os_ver}: проверялось на 9+!" ;;
         "centos") version_ge "$os_ver" "9"     && os_type="rhel" || die "CentOS ${os_ver}: проверялось на 9+!" ;;
         *) die "ОС '${os_ver}' не проверялась; ожидается Ubuntu 24.04+ / Debian 12+ / Almalinux 9+ / Rocky 9+ / Centos 9+." ;;
-    esac #    print_ok "ОС: ${os_id} ${os_ver}, Тип ОС: ${os_type}"
+    esac
+    log "ОС: ${os_id} ${os_ver}, Тип ОС: ${os_type}"
 }
 
 
@@ -108,22 +108,6 @@ mokutil --sb-state
 mokutil --import /var/lib/dkms/mok.pub
 
 EOF
-}
-
-confirm() {
-    local prompt="$1"
-
-    if [ "$NONINTERACTIVE" -eq 1 ]; then
-        return 0
-    fi
-    if [ ! -t 0 ]; then
-        warn "Нет терминала для подтверждения, продолжаю."
-        return 0
-    fi
-
-    local answer
-    read -r -p "${prompt} [y/N]: " answer
-    [[ "$answer" =~ ^[Yy]$ ]]
 }
 
 check_os() {
