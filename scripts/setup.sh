@@ -13,8 +13,6 @@ ME_SELF="${SELF##*/}"
 ME_CLEAN="${ME_SELF%.*}"
 PROGRAM="${0##*/:-$ME_CLEAN}"
 ARGS=( "$@" )
-echo $SELF
-exit 0
 PARENT_DIR="$(dirname "${SELF_DIR}")"
 repo_root="$(cd "${PARENT_DIR}" && pwd)"
 
@@ -28,7 +26,10 @@ mod_repo="amneziawg-linux-kernel-module-vds"
 #mod_repo="amneziawg-linux-kernel-module"
 mod_branch="master"
 
-setup_tmp="${ME_CLEAN}/${mod_repo}-${mod_tmp_ver}"
+setup_tmp="${SELF_DIR}/${mod_repo}-${mod_tmp_ver}"
+echo $setup_tmp
+exit 0
+
 
 # State
 ACTION=""
