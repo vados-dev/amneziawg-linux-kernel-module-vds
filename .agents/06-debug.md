@@ -58,3 +58,19 @@
   поэтому env вынесен в job, а не в корень файла.
 - При отсутствии секретов шаг печатает `::warning::` с именами проверенных секретов вместо
   молчаливого `exit 0`.
+
+### 13.11.2026 12:43 MSK
+- Управление уведомлениями переведено на два флага: `NOTIFY_ON_UPDATE` и `NOTIFY_ON_RESULT`
+  (boolean, default `false`). Объявлены в `workflow_dispatch` check-upstream и merge,
+  а также в `workflow_call` merge и stable.
+- `check-upstream.yml` — точка входа цепочки: флаги объявлены в `workflow_dispatch.inputs`
+  и продублированы в глобальном `env:`.
+- Приоритет: `true` в inputs перекрывает всё; `false` наследует значение из
+  `vars.NOTIFY_ON_UPDATE` / `vars.NOTIFY_ON_RESULT` и из значения, переданного check-upstream.
+- `NOTIFY_ON_UPDATE=true`: `merge.yml` автоматически не запускается, отправляется только
+  уведомление о новом upstream теге со ссылкой на issue и run.
+- `NOTIFY_ON_RESULT=true`: короткие итоговые уведомления со ссылками на логи и отчёты
+  во всех трёх workflow; при `false` отправляется только сообщение о сбое.
+- `TG_TOKEN`/`TG_CHAT_ID` перенесены из job-level `env` в `env:` конкретных шагов отправки.
+- Блоки `secrets:` с `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` удалены из `workflow_call`.
+- `TELEGRAM_NOTIFY` удалён полностью: управление только через новые флаги.
