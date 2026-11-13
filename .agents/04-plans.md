@@ -154,6 +154,75 @@ flowchart TD
 Критерий: `notify_mode=none` — ни одного сообщения; `changes` — одно сообщение только
 при новом теге или сбое; `always` — одно сообщение на любой исход.
 
+## Phase E: merge.yml во временном CI-образе
+
+Статус: план, ожидает подтверждения владельцем (13.11.2026 23:50 MSK).
+Основание: постановка владельца — образ
+`ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts` уже собран,
+и лог `.agents/logs/debug/131120261625-merge.yml.log:495-503`
+(`Error: Unable to find a match: dkms` в чистом `quay.io/centos/centos:stream10`).
+
+Цель: запускать job `merge` в готовом CI-образе, где уже включены CRB и EPEL,
+вместо чистого `quay.io/centos/centos:stream10`, и не зависеть от ручной установки
+базовых пакетов.
+
+```mermaid
+flowchart LR
+  A[merge.yml job merge] --> B[ghcr.io vados-dev amneziawg-linux-kernel-module-vds centos-10 lts]
+  B --> C[git make curl tar gzip]
+  B --> D[CRB и EPEL включены]
+  C --> E[scripts setup.sh -d -y]
+  D --> E
+  E --> F[dkms из EPEL и gcc из appstream]
+  F --> G[setup.sh -l -y -k KERNEL]
+  G --> H[make -C src print-version]
+```
+
+Порядок выполнения:
+
+1. `.github/workflows/merge.yml`.
+   - `jobs.merge.container.image` → `ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts`;
+     `options: --privileged` сохранить.
+   - Добавить `container.credentials` (`github.actor` / `secrets.GITHUB_TOKEN`) и
+     `permissions: packages: read` — на случай приватного пакета GHCR; для публичного
+     логин безвреден.
+   - Шаг `Install bootstrap tools` (`merge.yml:144-147`) заменить на `Verify CI image tooling`:
+     `command -v git make curl tar gzip base64 awk sed` с `::error::`, если чего-то нет.
+     Шаг ставится до `Checkout VDS`, чтобы не тратить сеть на `dnf`.
+   - `Install dependencies` (`setup.sh -d -y`) и `Build and test the merged tree` оставить:
+     `gcc` и `dkms` в образ не входят, версия ядра выбирается в рантайме.
+   - Остальные шаги (prepare, push, stable, notify) не меняются.
+
+2. `scripts/setup.sh`.
+   - `install_deps`: при ошибке `dnf install` включить `epel-release` и CRB
+     (`dnf install -y dnf-plugins-core epel-release`, `dnf config-manager --set-enabled crb`,
+     `dnf makecache`) и повторить установку; ошибку возвращать только после повтора.
+   - Причина: `dkms` отсутствует в базовых репозиториях EL10; именно на этом упал
+     прогон `131120261625`.
+   - Критерий: на чистом CentOS Stream 10 `setup.sh -d -y` завершается успешно.
+
+3. Документация и журналы.
+   - `05-issues.md`: запись о падении `131120261625` (`dkms` не найден).
+   - `03-tasks.md`: задача на перевод merge на CI-образ со статусами.
+   - После реализации — отчёт `.agents/logs/YYYYMMDDHHMMSS-reports.md`.
+
+Критерии готовности:
+- В `merge.yml` нет `quay.io/centos/centos:stream10`.
+- YAML разбирается `python yaml.safe_load`; `.tmp/check-workflow.py` не находит
+  неизвестных контекстов и висячих `steps.*.outputs`.
+- `bash -n scripts/setup.sh` (где доступен bash) без ошибок.
+- Владелец запускает `merge.yml` с `dry_run=true`, `upstream_ref=v3.1.20261113-02`:
+  job стартует в GHCR-образе, `dkms` ставится из EPEL, `make -C src print-version`
+  печатает `3.1.20261113-02-vds`, push не выполняется.
+
+Принятые решения:
+1. Образ закрепляется тегом `lts` (владелец публикует его через `build-ci-image.yml`);
+   конкретный `vX.Y.Z`/`sha-*` можно подставить позже.
+2. `WIDTH_DKMS=true` в образе не требуется: `dkms` ставится из EPEL на шаге
+   `Install dependencies`; предустановленный `amneziawg-dkms` может конфликтовать
+   с версией из merged-дерева.
+3. `WIDTH_KERNEL` в образе не обязателен: целевое ядро выбирает `setup.sh -k`.
+
 ## Выполненные этапы
 
 - [x] Phase A — документация `.agents`, README и INSTALL.
