@@ -18,23 +18,20 @@ on:
         required: false
         default: true
         type: boolean
-      NOTIFY_ON_UPDATE:
-        description: "Inherited from merge.yml; kept for a uniform notification contract"
+      notify_mode:
+        description: "none|inherit|changes|always; none and inherit defer to repository variable NOTIFY_MODE"
         required: false
-        default: false
-        type: boolean
-      NOTIFY_ON_RESULT:
-        description: "Send short result notifications with links to logs and reports"
-        required: false
-        default: false
-        type: boolean
+        default: "none"
+        type: string
 
 permissions:
   contents: write
 
 env:
-  NOTIFY_ON_UPDATE: ${{ inputs.NOTIFY_ON_UPDATE || vars.NOTIFY_ON_UPDATE == 'true' }}
-  NOTIFY_ON_RESULT: ${{ inputs.NOTIFY_ON_RESULT || vars.NOTIFY_ON_RESULT == 'true' }}
+  # Repository variable TELEGRAM_NOTIFY=false is a global kill switch.
+  TELEGRAM_ENABLED: ${{ vars.TELEGRAM_NOTIFY != 'false' }}
+  NOTIFY_MODE_INPUT: ${{ inputs.notify_mode }}
+  NOTIFY_MODE_VAR: ${{ vars.NOTIFY_MODE }}
 
 jobs:
   release:
@@ -44,6 +41,28 @@ jobs:
         with:
           ref: ${{ inputs.vds_branch }}
           fetch-depth: 0
+
+      - name: Resolve notification mode
+        id: notify
+        run: |
+          set -euo pipefail
+          # Explicit caller values win over the repository variable; none/inherit defer to it.
+          raw="${NOTIFY_MODE_INPUT:-none}"
+          case "$raw" in
+            changes|always) mode="$raw" ;;
+            *) mode="${NOTIFY_MODE_VAR:-changes}" ;;
+          esac
+          case "$mode" in
+            none|changes|always) ;;
+            *) echo "::warning::Unknown NOTIFY_MODE '${mode}' - falling back to changes"; mode=changes ;;
+          esac
+          if [ "${TELEGRAM_ENABLED:-true}" != "true" ]; then
+            echo "TELEGRAM_NOTIFY=false - notifications disabled"
+            mode=none
+          fi
+          echo "NOTIFY_MODE=$mode" >> "$GITHUB_ENV"
+          echo "notify_mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "notify_mode=${mode} (input=${raw}, repository=${NOTIFY_MODE_VAR:-unset})"
 
       - name: Resolve version, tag and branch
         id: version
@@ -105,37 +124,30 @@ jobs:
           git push origin --delete stable || true
           git push origin stable
 
-      - name: Notify Telegram on result
-        if: ${{ always() && env.NOTIFY_ON_RESULT == 'true' }}
+      - name: Notify Telegram
+        if: ${{ always() && env.TELEGRAM_ENABLED == 'true' && env.NOTIFY_MODE != 'none' }}
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TAG: ${{ steps.version.outputs.tag }}
           JOB_STATUS: ${{ job.status }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
+          if [ "$JOB_STATUS" = "success" ] && [ "${NOTIFY_MODE:-changes}" = "changes" ] && [ "${DRY_RUN:-true}" = "true" ]; then
+            echo "dry-run release succeeded — nothing to report (notify_mode=changes)"
+            exit 0
+          fi
           if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then
             echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"
             exit 0
           fi
-          text="stable.yml: ${JOB_STATUS} for ${TAG:-unknown tag}. Logs: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TG_CHAT_ID}" \
-            --data-urlencode "text=${text}" > /dev/null
-
-      - name: Notify Telegram on failure
-        if: ${{ failure() && env.NOTIFY_ON_RESULT != 'true' }}
-        env:
-          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then
-            echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"
-            exit 0
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ "$JOB_STATUS" = "success" ]; then
+            text="stable.yml: released ${TAG:-unknown tag} (dry_run: ${DRY_RUN:-true}). Logs: ${run_url}"
+          else
+            text="stable.yml: ${JOB_STATUS} for ${TAG:-unknown tag} (dry_run: ${DRY_RUN:-true}). Logs: ${run_url}"
           fi
-          text="stable.yml failed for ${TAG:-unknown tag}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TG_CHAT_ID}" \
             --data-urlencode "text=${text}" > /dev/null
