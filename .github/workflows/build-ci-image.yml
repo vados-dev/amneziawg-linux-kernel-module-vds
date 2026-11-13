@@ -15,14 +15,31 @@ on:
         options:
           - build
           - delete
-      image_tag:
-        description: "Build mode suffix. Final tag = CI_IMAGE_VER+1(+suffix)"
-        required: false
-        default: ""
-        type: choice
-        options:
-          - ""
-          - "b"
+      dockerfile:
+        description: "Dockerfile in location docker/ci-images/"
+        required: true
+        default: "Dockerfile.rpm"
+        type: string
+      base_image:
+        description: "Base image"
+        required: true
+        default: "quay.io/centos/centos:stream10"
+        type: string
+      build_platforms:
+        description: "Platforms for build images (e.g. linux/amd64,linux/arm64,linux/arm/v6,linux/arm/v7)"
+        required: true
+        default: "linux/amd64"
+        type: string
+      image_name:
+        description: "Build image name"
+        required: true
+        default: "centos-10"
+        type: string
+      width_otel:
+        description: "Install dependencies for otel module"
+        required: true
+        default: true
+        type: boolean
       delete_tags:
         description: "Delete mode: space/comma separated tags (e.g. v0.0.1b,sha-abc123)"
         required: false
@@ -48,13 +65,12 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          CI_IMAGE_NAME: ${{ inputs.image_name }}
           CI_IMAGE_VER: ${{ vars.CI_IMAGE_VER || '' }}
         run: |
           set -euo pipefail
           repo_lc="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
-          image="ghcr.io/${repo_lc}/ci"
-          suffix_input="${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || '' }}"
-          suffix_input="$(echo "${suffix_input}" | tr '[:upper:]' '[:lower:]' | xargs)"
+          image="ghcr.io/${repo_lc}/${CI_IMAGE_NAME}"
 
           next_tag() {
             local t="$1"
@@ -87,7 +103,7 @@ jobs:
           # Discover latest numeric tag from existing GHCR image versions.
           owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           repo_name="${GITHUB_REPOSITORY#*/}"
-          package_name="${repo_name}/ci"
+          package_name="${repo_name}/${CI_IMAGE_NAME}"
           package_name_enc="${package_name//\//%2F}"
           tags_json="$(gh api -H "Accept: application/vnd.github+json" "/users/${owner_lc}/packages/container/${package_name_enc}/versions?per_page=100" 2>/dev/null || echo '[]')"
           latest_registry_numeric_tag="$(
@@ -105,13 +121,16 @@ jobs:
             highest_numeric_tag="${base_numeric_tag}"
           fi
 
-          tag="$(next_tag "${highest_numeric_tag}")${suffix_input}"
+          tag="$(next_tag "${highest_numeric_tag}")"
           tag_sanitized="$(echo "${tag}" | tr '/:@ ' '-' | tr -cd 'a-zA-Z0-9._-')"
           echo "image=${image}" >> "${GITHUB_OUTPUT}"
           echo "tag=${tag_sanitized}" >> "${GITHUB_OUTPUT}"
           echo "sha_tag=sha-${GITHUB_SHA::12}" >> "${GITHUB_OUTPUT}"
           echo "image_ref=${image}:${tag_sanitized}" >> "${GITHUB_OUTPUT}"
           echo "image_ref_sha=${image}:sha-${GITHUB_SHA::12}" >> "${GITHUB_OUTPUT}"
+
+#      - name: Set up QEMU
+#        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -126,12 +145,26 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v7
         with:
+          build-contexts: |
+            imagefile=docker-image://${{ inputs.base_image }}
+          build-args: |
+            WIDTH_OTEL=${{ inputs.width_otel }}
           context: .
-          file: internal/ci-image/Dockerfile.ci
+          file: docker/ci-images/${{ inputs.dockerfile }}
+          platforms: ${{ inputs.build_platforms }}
           push: true
           tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.tags }}
+          annotations: ${{ steps.meta.outputs.annotations }}           
+
+#                      ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.sha_tag }}
+
+#          meta-images: ${CI_IMAGE_NAME}
+#          meta-tags: |
+#                type=ref,event=branch
+#                type=ref,event=pr
+#                type=semver,pattern={{version}}
+#                type=semver,pattern={{major}}.{{minor}}
 
       - name: Push latest/lts tags
         shell: bash
@@ -192,6 +225,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.amsternl != '' && secrets.amsternl || github.token }}
           DELETE_TAGS: ${{ inputs.delete_tags }}
+          image_ci: ${{ steps.meta.outputs.image }}
         run: |
           set -euo pipefail
           if [[ -z "${DELETE_TAGS// }" ]]; then
@@ -201,7 +235,7 @@ jobs:
 
           owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           repo_name="${GITHUB_REPOSITORY#*/}"
-          package_name="${repo_name}/ci"
+          package_name="${repo_name}/${image_ci}"
           package_name_enc="${package_name//\//%2F}"
           tags="$(echo "${DELETE_TAGS}" | tr ',' ' ' | xargs -n1 | sed '/^$/d' | sort -u)"
 
