@@ -15,5 +15,10 @@
 | `.agents/logs/YYYYMMDDHHMMSS-notes.md` | Заметки агента по правилу 4 из `02-rules.md`. |
 | `.agents/logs/YYYYMMDDHHMMSS-reports.md` | Отчёты агента по правилу 5 из `02-rules.md`. |
 | `.agents/logs/debug/` | Материалы отладки: логи, дампы, разбор compat.h. |
+| `C:\Programm\Git\bin\` | Путь к бинарникам Git Bash и gh-cli. |
+| `C:\Programm\Git\bin\bash.exe` | Git Bash. |
+| `C:\Programm\Git\bin\sh.exe` | Git Bash. |
+| `C:\Programm\Git\bin\gh.exe` | gh-cli. |
+| `C:\Programm\Git\bin\git.exe` | git. |
 
 `AGENTS.md` — это только указатель. Обновляйте соответствующий файл `.agents/`, а не `AGENTS.md`.
