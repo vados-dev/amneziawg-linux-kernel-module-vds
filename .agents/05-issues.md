@@ -98,6 +98,22 @@ Telegram-уведомления не отправлялись: в логе `1311
 `quay.io/centos/centos:stream10`, потому что шаг `Install bootstrap tools` стоит после
 `Checkout VDS`. Требует отдельного исправления порядка шагов.
 
+### 13.11.2026 16:15 MSK
+Двойные уведомления в `check-upstream.yml` (прогон `131120261554`): при одновременно включённых
+`NOTIFY_ON_UPDATE` и `NOTIFY_ON_RESULT` уходили два сообщения об одном событии.
+
+1. `NOTIFY_ON_UPDATE` означал запрет автозапуска `merge.yml`, а не уведомление; в `merge.yml`
+   и `stable.yml` тот же флаг имел другой смысл и был мёртвым параметром.
+2. `inputs.X || vars.X == 'true'` не даёт выключить флаг из dispatch — `false` означает
+   «взять из vars», а не «выключить».
+3. `-F NOTIFY_ON_UPDATE` при запуске merge всегда передавал `false`.
+4. `always()` в шаге результата отправлял «success» и при `in_sync=true`.
+5. Инпуты в UPPERCASE совпадали с именами env — в логе невозможно различить источник значения.
+
+Исправлено: `notify_mode` (`none|inherit|changes|always`), `auto_merge`, kill-switch
+`vars.TELEGRAM_NOTIFY`, один шаг уведомления на прогон. Отчёт —
+`.agents/logs/202611131615-reports.md`.
+
 ### 13.11.2026 12:43 MSK
 Схема уведомлений переведена на `NOTIFY_ON_UPDATE` и `NOTIFY_ON_RESULT` (default `false`).
 
