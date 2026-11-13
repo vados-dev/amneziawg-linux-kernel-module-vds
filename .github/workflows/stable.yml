@@ -1,38 +1,58 @@
 name: Create stable tag
 
 on:
-  workflow_run:
-    workflows: ["Merge Upstream"]
-    types: [completed]
-  workflow_dispatch:
+  workflow_call:
     inputs:
       version:
         description: "Version to tag (default: internal/config/current)"
         required: false
+        default: ""
+        type: string
+      vds_branch:
+        description: "Source branch for the stable release"
+        required: false
+        default: "master"
         type: string
       dry_run:
         description: "Do not create tag, release or update the stable branch"
         required: false
         default: true
         type: boolean
+      NOTIFY_ON_UPDATE:
+        description: "Inherited from merge.yml; kept for a uniform notification contract"
+        required: false
+        default: false
+        type: boolean
+      NOTIFY_ON_RESULT:
+        description: "Send short result notifications with links to logs and reports"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
 
+env:
+  NOTIFY_ON_UPDATE: ${{ inputs.NOTIFY_ON_UPDATE || vars.NOTIFY_ON_UPDATE == 'true' }}
+  NOTIFY_ON_RESULT: ${{ inputs.NOTIFY_ON_RESULT || vars.NOTIFY_ON_RESULT == 'true' }}
+
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.vds_branch }}
           fetch-depth: 0
 
-      - name: Resolve version and tag
+      - name: Resolve version, tag and branch
         id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BRANCH: ${{ inputs.vds_branch }}
         run: |
           set -euo pipefail
+          branch="${INPUT_BRANCH:-master}"
           version="${INPUT_VERSION:-}"
           if [ -z "$version" ]; then
             version="$(tr -d '[:space:]' < internal/config/current)"
@@ -41,9 +61,12 @@ jobs:
             v*) tag="$version" ;;
             *)  tag="v${version}" ;;
           esac
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "Release tag: $tag"
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release tag: $tag (branch: $branch)"
 
       - name: Build release archive
         env:
@@ -57,7 +80,7 @@ jobs:
           sha256sum "dist/amneziawg-${VERSION}.tar.gz" > "dist/amneziawg-${VERSION}.tar.gz.sha256"
 
       - name: Create tag and GitHub release
-        if: ${{ !inputs.dry_run }}
+        if: ${{ inputs.dry_run == false }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
@@ -71,27 +94,48 @@ jobs:
             --generate-notes \
             --notes "VDS release ${VERSION}."
 
-      - name: Recreate stable branch from master
-        if: ${{ !inputs.dry_run }}
+      - name: Recreate stable branch from source branch
+        if: ${{ inputs.dry_run == false }}
+        env:
+          BRANCH: ${{ steps.version.outputs.branch }}
         run: |
           set -euo pipefail
+          git fetch origin "$BRANCH"
+          git checkout -B stable "origin/${BRANCH}"
           git push origin --delete stable || true
-          git branch -f stable HEAD
           git push origin stable
 
-      - name: Notify Telegram on failure
-        if: failure()
+      - name: Notify Telegram on result
+        if: ${{ always() && env.NOTIFY_ON_RESULT == 'true' }}
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TAG: ${{ steps.version.outputs.tag }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then
+            echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"
+            exit 0
+          fi
+          text="stable.yml: ${JOB_STATUS} for ${TAG:-unknown tag}. Logs: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=${text}" > /dev/null
+
+      - name: Notify Telegram on failure
+        if: ${{ failure() && env.NOTIFY_ON_RESULT != 'true' }}
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-            echo "Telegram secrets are not configured — skipping notification"
+          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then
+            echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"
             exit 0
           fi
           text="stable.yml failed for ${TAG:-unknown tag}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
             --data-urlencode "text=${text}" > /dev/null
