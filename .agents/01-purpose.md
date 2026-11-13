@@ -1,7 +1,7 @@
 01 — Цель
 Извлечено из файла AGENTS.md . Этот файл содержит проектную информацию.
 
-Обзор проекта
+## Обзор проекта
 amneziawg-linux-kernel-module-vds (далее VDS) — это форк [amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module) (в настоящее время internal/config/current или #define WIREGUARD_VERSION в src/version.h), который добавляет встроенную поддержку модуля amneziawg из основного репозитория, адаптируя код под Centos 10 Stream + собственные правки для удобства интеграции. Специфический для VDS код находится в internal/vds/.
 
 ## Основная философия
@@ -23,7 +23,7 @@ amneziawg-linux-kernel-module-vds (далее VDS) — это форк [amneziaw
 и guards вида !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))).
 Остальное добавляется в соответствии с правилами в 02-rules.md.
 
-Стратегия синхронизации с исходным кодом
+### Стратегия синхронизации с исходным кодом
 - Запуск .github/workflows/check-upstream.yml, где проверяем версию исходного кода и сравниваем с текущей версией VDS.
 - Выбор версии источника по умолчанию: взятая из последнего тега в исходном репозитории, если не определено в глобальной
   переменной default_tag, либо написанно  вручную  значение manual_tag в workflow_dispatch, внутри check-upstream.yml.
@@ -41,10 +41,11 @@ amneziawg-linux-kernel-module-vds (далее VDS) — это форк [amneziaw
   stable из бранча master.
 - Очищаем бранч master от папок src, debian, kernel-tree-scripts и прочих папок, которые относились к upstream и имеют значение при.
 - Записываем новую текущую версию VDS в internal/current, записываем в internal/upstream бранч или тэг из upstream и в internal/version
-  текущую версию upstream.
-- Записываем в бранч master внутри .github/workflows/merge.yml из временного, успешно протестированного образа с перезаписью файлов из.
+  текущую версию upstream, по пунктfv 9 и 10, файла 02-rules.md
+- Записываем в бранч master внутри .github/workflows/merge.yml из временного, успешно протестированного образа,
+  по пункту 11, файла 02-rules.md.
 
-Репозитории:
+### Репозитории
 origin→ amnezia-vpn/amneziawg-linux-kernel-module (upstream)
 gh→ vados-dev/amneziawg-linux-kernel-module-vds
 
@@ -52,7 +53,7 @@ gh→ vados-dev/amneziawg-linux-kernel-module-vds
 Активная upstream версия: в internal/version.
 Текущая версия VDS: в internal/current (записывается туда после успешного слияния и выполнения команды make print-version).
 
-В настоящее время в VDS исправлено:
+### В настоящее время в VDS исправлено
 - В src/compat/compat.h, чтобы исправить ошибку при сборке и установке с помощью DKMS.
 - В src/Makefile добавлены версии модуля и функционал print-version.
 - В src/version.h прописана новая версия модуля.
