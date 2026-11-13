@@ -4,7 +4,7 @@ amneziawg-linux-kernel-module-vds
 
 Не воспринимайте этот файл как руководство по эксплуатации. Читайте .agents/00-index.md.
 
-По умолчанию для сессии: .agents/00-index.md→ 01-purpose.md+ 02-rules.md. Всё остальное по запросу.
+По умолчанию для сессии: .agents/00-index.md, далее по нему.
 
 Пульты дистанционного управления: origin=[amnezia-vpn/amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module), gh=vados-dev/amneziawg-linux-kernel-module-vds. 
 По умолчанию branch: master.
