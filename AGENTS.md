@@ -1,11 +1,9 @@
-# LucX-UI
+amneziawg-linux-kernel-module-vds
 
-Fork of [3x-ui](https://github.com/MHSanaei/3x-ui) with AmneziaWG and tunnel sidecars.
-LucX code lives in `internal/awg/` and `internal/lucx/`. Upstream edits only inside `LUCX-HOOK`.
+Форк amneziawg-linux-kernel-module с [amnezia-vpn](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module). Код правок находится в internal/vds/. Редактирование исходного кода возможно только внутри. VDS-HOOK.
 
-**Do not read this file as the operating manual.** Read `.agents/00-index.md`.
+Не воспринимайте этот файл как руководство по эксплуатации. Читайте .agents/00-index.md.
 
-Session default: `.agents/00-index.md` → `01-purpose.md` + `05-rules.md`.
-Everything else on demand. `docs/progress.md`: last 1–2 entries only.
+По умолчанию для сессии: .agents/00-index.md→ 01-purpose.md+ 02-rules.md. Всё остальное по запросу.
 
-Remotes: `origin` = MHSanaei/3x-ui, `gh` = AlexeyLCP/lucx-ui. Branch: `main`.
+Пульты дистанционного управления: origin= MHSanaei/3x-ui, gh= AlexeyLCP/lucx-ui. Ветка: main.

@@ -1,14 +1,4 @@
-name: Upstream watch
-
-# amneziawg-linux-kernel-module-HOOK: weekly check for new upstream amneziawg-linux-kernel-module releases. Compares the latest
-# amnezia-vpn/amneziawg-linux-kernel-module release tag with our embedded base version
-# (internal/config/version) and opens an issue when they diverge — the trigger
-# for the migration procedure (AGENTS.md rule 8). Idempotent: no duplicate
-# issues while one for the same tag is already open.
-#
-# YAML note: the run block is a literal block scalar — every script line,
-# including the heredoc body below, MUST stay at the same indentation, or the
-# block ends early and the workflow fails to parse (learned the hard way).
+name: Check Upstream
 
 on:
 #  schedule:

@@ -63,7 +63,7 @@ sudo apt-get install -y amneziawg
 Open `Terminal` and run:
 
 ```shell
-sudo dnf copr enable amneziavpn/amneziawg
+sudo dnf copr enable tigro/amneziawg
 sudo dnf install amneziawg-dkms amneziawg-tools
 ```
 
@@ -76,7 +76,7 @@ You may need to install kernel headers and/or build essentials packages before r
 
 1. In Terminal:
     ```shell
-    git clone https://github.com/amnezia-vpn/amneziawg-linux-kernel-module.git
+    git clone https://github.com/vados-dev/amneziawg-linux-kernel-module-vds.git
     cd amneziawg-linux-kernel-module/src
     ```
 
@@ -98,9 +98,21 @@ and link resulting tree to `kernel` symlink:
     Or on a capable system you may want to use DKMS for this:
     ```shell
     sudo make dkms-install
-    sudo dkms add -m amneziawg -v 1.0.0
-    sudo dkms build -m amneziawg -v 1.0.0
-    sudo dkms install -m amneziawg -v 1.0.0
+    ```
+
+    and
+    ```shell
+    sudo dkms add -m amneziawg -v $(make print-version)
+    sudo dkms build -m amneziawg -v $(make print-version)
+    sudo dkms install -m amneziawg -v $(make print-version) 
+    ```
+    or 
+    ```shell
+    sudo dkms install "amneziawg/$(make print-version)"
+    ```
+    check:
+    ```shell
+    sudo modprobe amneziawg
     ```
 
 ## Configuration

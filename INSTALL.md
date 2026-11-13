@@ -18,4 +18,3 @@ sudo dkms remove "amneziawg/$(dkms status | grep amneziawg | awk -F'[/, ]+' '{pr
 # Install new version:
 sudo make dkms-install
 sudo dkms install "amneziawg/$(make print-version)"
-
