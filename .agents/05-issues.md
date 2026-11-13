@@ -97,3 +97,13 @@ Telegram-уведомления не отправлялись: в логе `1311
 Отдельно обнаружено в том же логе (`:88`): `git: command not found` в контейнере
 `quay.io/centos/centos:stream10`, потому что шаг `Install bootstrap tools` стоит после
 `Checkout VDS`. Требует отдельного исправления порядка шагов.
+
+### 13.11.2026 12:43 MSK
+Схема уведомлений переведена на `NOTIFY_ON_UPDATE` и `NOTIFY_ON_RESULT` (default `false`).
+
+1. `TELEGRAM_NOTIFY` удалён из workflows; управление только через новые inputs.
+2. `TG_TOKEN`/`TG_CHAT_ID` вынесены из job-level `env` в `env:` шагов отправки.
+3. Блоки `secrets:` с токеном и chat id удалены из `workflow_call` merge и stable.
+4. Приоритет значений: `true` из inputs → значение из check-upstream → repo variable → `false`.
+5. `NOTIFY_ON_UPDATE=true` блокирует автоматический запуск merge и отправляет только уведомление.
+6. Осталось проверить запуском оба режима: `NOTIFY_ON_RESULT=false` и `true`.
