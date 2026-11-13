@@ -2,17 +2,25 @@
 Извлечено из файла AGENTS.md . Этот файл содержит проектную информацию.
 
 Обзор проекта
-amneziawg-linux-kernel-module-vds (далее VDS) — это форк [amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module) (в настоящее время internal/config/current или #define WIREGUARD_VERSION в src/version.h), который добавляет встроенную поддержку модуля amneziawg из основного репозитория, адаптируя код под Centos 10 Stream + собственные правки для удобства интеграции. Специфический для VDS код находится в internal/vds/; все точки интеграции в исходных файлах заключены в VDS-HOOK/ и VDS-HOOK маркеры.
+amneziawg-linux-kernel-module-vds (далее VDS) — это форк [amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module) (в настоящее время internal/config/current или #define WIREGUARD_VERSION в src/version.h), который добавляет встроенную поддержку модуля amneziawg из основного репозитория, адаптируя код под Centos 10 Stream + собственные правки для удобства интеграции. Специфический для VDS код находится в internal/vds/.
 
-Основная философия
-Минимальное вмешательство для упрощения синхронизации с исходным кодом. Цель: каждый релиз в исходном коде должен быть практически тривиальным переносом. Это означает:
+## Основная философия
+Минимальное вмешательство для упрощения синхронизации с исходным кодом. 
 
+### Цель
+Каждый релиз (тэг) в исходном коде должен быть практически тривиальным переносом.
+
+Это означает:
 Код VDS патчей находится в изолированных файлах (internal/vds/).
-Файлы из вышестоящего источника клонируются как есть во временный образ внутри обработчика .gihub/workflows/merge.yml.
-Файлы из VDS бранча main, клонируются как есть во временный образ внутри обработчика .gihub/workflows/merge.yml.
+Варсии и пр. конфигурационные файлы механизмов миграции находится в изолированных файлах (internal/config/).
+Файлы из вышестоящего источника клонируются как есть во временный образ, после его обновления до нужной (тестируемой) версии ядра и подготовки
+внутри обработчика .gihub/workflows/merge.yml.
+Файлы из VDS бранча master, копируются как есть во временный образ внутри обработчика .gihub/workflows/merge.yml в ту же папку вышестоящего источника.
 Далее анализируем правки в источнике и различия с предыдущими правками VDS, оцениваем возможность слияния с необходимыми правками.
 Агент сам принимает решение слияния с исходным кодом.
-Основное, это правки в src/compat/compat.h, без них DKMS отваливается с ошибкой на redeclare.
+Основное, это правки в src/compat/compat.h, без них DKMS отваливается с ошибкой на redeclare,
+причём KCFLAGS=-Wno-redundant-decls не дают ожидаемого результата (работают правки ISRHEL10/ISRHEL100/ISRHEL101
+и guards вида !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))).
 Остальное добавляется в соответствии с правилами в 02-rules.md.
 
 Стратегия синхронизации с исходным кодом
@@ -28,12 +36,13 @@ amneziawg-linux-kernel-module-vds (далее VDS) — это форк [amneziaw
 - Если что-то не так, ничего не бросаем, а продолжаем размышлять глядя на ошибки в логах, только если агент совсем
   зашёл в тупик, присылаем сообшение в telegram боте, на указанный адрес в защищённой переменной репозитория и завершаем
   работу merge.yml.
-- Если слияние проходит успешно, запускаем .github/workflows/stable.yml, в котором переименовываем предыдущий бранч
-  stable в stable-$(cat internal/current), и создаем новый tag stable из бранча master.
-- Записываем текущую версию VDS в internal/current, записываем в internal/branch ветку upstream и в internal/version
+- Если слияние проходит успешно, запускаем .github/workflows/stable.yml, в котором создаём тэг из предыдущего бранча
+  stable, вида v$(cat internal/config/current) с архивами в Assets, после чего удаляем бранч stable и создаём новый бранч
+  stable из бранча master.
+- Очищаем бранч master от папок src, debian, kernel-tree-scripts и прочих папок, которые относились к upstream и имеют значение при.
+- Записываем новую текущую версию VDS в internal/current, записываем в internal/upstream бранч или тэг из upstream и в internal/version
   текущую версию upstream.
-- Очищаем бранч master внутри .github/workflows/merge.yml.
-- Записываем бранч master внутри .github/workflows/merge.yml из временного, успешно протестированного образа.
+- Записываем в бранч master внутри .github/workflows/merge.yml из временного, успешно протестированного образа с перезаписью файлов из.
 
 Репозитории:
 origin→ amnezia-vpn/amneziawg-linux-kernel-module (upstream)
