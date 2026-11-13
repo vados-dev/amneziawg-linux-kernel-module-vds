@@ -123,3 +123,39 @@ Telegram-уведомления не отправлялись: в логе `1311
 4. Приоритет значений: `true` из inputs → значение из check-upstream → repo variable → `false`.
 5. `NOTIFY_ON_UPDATE=true` блокирует автоматический запуск merge и отправляет только уведомление.
 6. Осталось проверить запуском оба режима: `NOTIFY_ON_RESULT=false` и `true`.
+
+### 13.11.2026 23:42 MSK
+Исправлены `build-ci-image.yml` и `internal/ci-image/Dockerfile.ci`.
+Отчёт — `.agents/logs/202611132342-reports.md`.
+
+1. `build-ci-image.yml:159-160` — невалидные выражения `${{ inputs.X || X=false }}`
+   (`Unexpected symbol: '=false'`); шаг `Get env variables` удалён.
+2. `:170` — `WIDTH_BASE_PACKAGES=${{ env }}`: контекст-объект без свойства.
+3. `:175-177` — `tags`/`annotations` брались из несуществующих выходов `steps.meta`,
+   из-за чего `push: true` шёл с пустым списком тегов; sha-тег не пушился, но
+   использовался в `imagetools create`.
+4. `:200-206` — heredoc с отступами писал пробелы в `ci-image.env`; заменён на `printf`.
+5. `:247` — `steps.meta.outputs.image` в job `delete-image-tags`, где шага `meta` нет.
+6. `:118,260,269` — `/users/{owner}/packages/...` не работает для пакетов организации,
+   добавлен fallback на `/orgs/{owner}`; `repo_name` приведён к нижнему регистру.
+7. `:164-166` — `build-contexts: docker-image://` не использовался Dockerfile, input
+   `base_image` игнорировался; заменён на build-arg `CI_BASE_IMAGE`.
+8. `:71,143,146,149,163,209` — несуществующие мажоры actions (`checkout@v6`,
+   `build-push-action@v7`, `upload-artifact@v7` и др.) заменены на `v4`/`v3`/`v6`.
+9. `:51` — `pythov-venv`, `libmnl-dev`, `pkg-config` отсутствуют в EL-репозиториях,
+   `dnf -y install` под `set -eux` ронял сборку образа.
+10. `Dockerfile.ci` — `WIDTH_KERNEL` игнорировался (ставилось ядро runner-а по `uname -r`),
+    `centos-stream-$-$(arch)` был сломан, `WIDTH_BASE_PACKAGES=""` давал `dnf install`
+    без аргументов. Проверено статически; запуск остаётся за владельцем (правило 7).
+
+### 13.11.2026 23:50 MSK
+Прогон `131120261625` (`merge.yml`, `dry_run=true`) упал на шаге `Install dependencies`:
+`Error: Unable to find a match: dkms` (`.agents/logs/debug/131120261625-merge.yml.log:495-503`).
+
+1. `quay.io/centos/centos:stream10` не содержит EPEL, а `dkms` в EL10 поставляется только оттуда;
+   `scripts/setup.sh:116` ставит `dkms` первым пакетом и роняет весь job.
+2. `epel-release` в чистом образе не установлен; `check_os` проходит (`centos 10`), поэтому
+   ошибка проявляется только на `dnf install`.
+3. Решение: job `merge` переводится на CI-образ
+   `ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts`, где CRB и EPEL включены;
+   в `install_deps` добавляется повтор с включением EPEL/CRB. План — `04-plans.md`, Phase E.
