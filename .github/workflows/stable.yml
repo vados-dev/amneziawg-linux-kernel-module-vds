@@ -1,1 +1,97 @@
 name: Create stable tag
+
+on:
+#  workflow_run:
+#    workflows: ["Merge Upstream"]
+#    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to tag (default: internal/config/current)"
+        required: false
+        type: string
+      dry_run:
+        description: "Do not create tag, release or update the stable branch"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version and tag
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION:-}"
+          if [ -z "$version" ]; then
+            version="$(tr -d '[:space:]' < internal/config/current)"
+          fi
+          case "$version" in
+            v*) tag="$version" ;;
+            *)  tag="v${version}" ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $tag"
+
+      - name: Build release archive
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          git archive --format=tar.gz \
+            --prefix="amneziawg-${VERSION}/" \
+            -o "dist/amneziawg-${VERSION}.tar.gz" HEAD
+          sha256sum "dist/amneziawg-${VERSION}.tar.gz" > "dist/amneziawg-${VERSION}.tar.gz.sha256"
+
+      - name: Create tag and GitHub release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git tag "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" dist/* \
+            --title "$TAG" \
+            --generate-notes \
+            --notes "VDS release ${VERSION}."
+
+      - name: Recreate stable branch from master
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          git push origin --delete stable || true
+          git branch -f stable HEAD
+          git push origin stable
+
+      - name: Notify Telegram on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+            echo "Telegram secrets are not configured — skipping notification"
+            exit 0
+          fi
+          text="stable.yml failed for ${TAG:-unknown tag}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${text}" > /dev/null

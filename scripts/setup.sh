@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 
-set -o pipefail
+set -uo pipefail
 
-# Flags
-INST_DEPS=0; RM_DEPS=0; SETUP_MOD=0; ADD_MOD=0; REINSTALL=0; UNINSTALL=0; HELP=0; HELP_EXIT_RC=0
-#####################################################################################
+# Common vars
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
-cur_dir=${SELF%/*}
+cur_dir="${SELF%/*}"
 
 amf="/etc/modules-load.d/amneziawg.conf"
 wmf="/etc/modules-load.d/wireguard.conf"
@@ -20,155 +18,264 @@ mod_branch="master"
 
 setup_tmp="${cur_dir}/${mod_repo}-${mod_tmp_ver}"
 
-if [ "$#" -lt 1 ]; then
-    HELP=1
-else
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -d|deps)          INST_DEPS=1 ;;
-            -rd|rmdeps)       RM_DEPS=1 ;;
-            -s|setup)         SETUP_MOD=1 ;;
-            -aa|addawg)       ADD_AWG=1 ;;
-            -ca|chkawg)       CHK_AWG=1 ;;
-            -aw|addwg)        ADD_WG=1 ;;
-            -da|delawg)       DEL_AWG=1 ;;
-            -dw|delwg)        DEL_WG=1 ;;
-            -r|reinstall)     REINSTALL=1 ;;
-            -u|uninstall)     UNINSTALL=1 ;;
-            -h|--help)        HELP=1 ;;
-            *) echo "Неизвестный аргумент: $1" >&2; HELP=1; HELP_EXIT_RC=1;;
-        esac
-        shift
-    done
-fi
-####################################################################################
+# State
+INST_DEPS=0
+RM_DEPS=0
+SETUP_MOD=0
+ADD_AWG=0
+CHK_AWG=0
+ADD_WG=0
+DEL_AWG=0
+DEL_WG=0
+REINSTALL=0
+UNINSTALL=0
+LOCAL_BUILD=0
+ACTION=""
+KERNEL_VERSION=""
+MOD_BRANCH="${mod_branch}"
 
-install_deps() {
-    dnf update -y
-    dnf install -y dkms
-    exit 0
-}
-
-remove_deps() {
-    echo "dkms"
-    dnf remove -y dkms
-    exit 0
-}
-
-add_awg_to_modules() {
-    mkdir -p "$(dirname "$amf")"
-    if ! grep -qxF 'amneziawg' "$amf" 2>/dev/null; then
-        echo "amneziawg" > "$amf" || log_warn "Write error $amf"
-        echo "Added to $amf."
-    fi
-}
-
-del_awg_from_modules() {
-    rm -f $amf 2>/dev/null | echo "Remove error $amf"
-    echo "$amf removed."
-}
-
-
-add_wg_to_modules() {
-    mkdir -p "$(dirname "$wmf")"
-    if ! grep -qxF 'wireguard' "$wmf" 2>/dev/null; then
-        echo "wireguard" > "$wmf" || log_warn "Write error $wmf"
-        echo "Added to $wmf."
-    fi
-}
-
-del_wg_from_modules() {
-    rm -f $wmf 2>/dev/null | echo "Remove error $wmf"
-    echo "$wmf removed."
-}
-
-
-start_setup() {
-    if ! dnf list installed "dkms" 2>/dev/null | grep -q "Installed Packages"; then
-        install_deps
-    fi
-#    rm -rf ./setup-3.1
-    git clone https://github.com/${mod_repo_owner}/${mod_repo}.git -b ${mod_branch} ${setup_tmp} > /dev/null 2>&1 | true
-#    git clone https://github.com/amnezia-vpn/amneziawg-linux-kernel-module.git ./setup-3.1
-#exit 0
-    local mod_ver
-    cd ${setup_tmp}/src && \
-    ! command -v make print-version > /dev/null 2>&1 && mod_ver="$(make print-version)" || mod_ver="$(cat version.h | grep "define WIREGUARD_VERSION" | awk -F'[/" ]+' '{print $3}')" && \
-#echo $mod_ver
-#exit 0
-    sudo make dkms-install && \
-    sudo dkms install -m amneziawg -v ${mod_ver}
-    add_awg_to_modules
-#    add_wg_to_modules
-    exit 0
-}
-
-start_remove() {
-    sudo dkms remove "amneziawg/$(dkms status | grep amneziawg | awk -F'[/, ]+' '{print $2}' | head -1)" --all
-    del_awg_from_modules
-    del_wg_from_modules
-    exit 0
-}
-
-load_module() {
-    local err
-    ! err=$(modprobe amneziawg 2>&1) > /dev/null 2>&1 && { echo "Модуль не загрузился: $err"; return 1; } || return 0
-    ! printf '%s' "$err" | grep -qiE 'key was rejected|required key not available' 2>/dev/null || { echo "ядро отказалось грузить модуль: $err"; return 2; }
-    ! compgen -G "/lib/modules/$(uname -r)/updates/dkms/amneziawg.ko*" >/dev/null 2>&1 || { echo "Собранные версии: $(dkms status -m amneziawg 2>/dev/null | tr '' ' ')"; return 2; }
-}
-
-check_module() {
-    if ! lsmod | grep -q -w amneziawg; then
-        echo -e "Module not loaded. Loading..."
-        load_module || exit 1
-        echo -e "Module loaded."
-        add_awg_to_modules
-    else
-        echo -e "amneziawg module loaded."
-    fi
-    echo -e "Module information:"
-    modinfo amneziawg | grep -E "filename|version|vermagic|srcversion" | while IFS= read -r line; do
-        echo -e "  $line"
-    done
-}
+log()  { printf 'INFO: %s\n' "$*"; }
+warn() { printf 'WARN: %s\n' "$*" >&2; }
+err()  { printf 'ERROR: %s\n' "$*" >&2; }
 
 show_help() {
     cat << 'EOF'
 Использование: sudo bash setup.sh [ОПЦИИ]
-Скрипт для установки модуля ядра AmneziaWG 2.0 на Centos 10 Stream.
+
+Скрипт для установки модуля ядра AmneziaWG на CentOS Stream 10.
 
 Опции:
   -d, deps              Установить необходимые зависимости
   -rd, rmdeps           Удалить зависимости
   -s, setup             Установить модуль
-#  -aa, addawg           Добавить amneziawg модуль в автозагрузку
-  -ca, chkawg           Проверить и добавить amneziawg модуль в автозагрузку
-  -aw, addwg            Добавить wireguard модуль в автозагрузку
-  -da, delawg           Удалить amneziawg модуль из автозагрузки
-  -dw, delwg            Удалить wireguard модуль из автозагрузки
+  -aa, addawg           Добавить amneziawg в автозагрузку
+  -ca, chkawg           Проверить и добавить amneziawg в автозагрузку
+  -aw, addwg            Добавить wireguard в автозагрузку
+  -da, delawg           Удалить amneziawg из автозагрузки
+  -dw, delwg            Удалить wireguard из автозагрузки
   -r, reinstall         Переустановить модуль
-  -u, uninstall         Удалить DKMS регистрацию
+  -u, uninstall         Удалить DKMS-регистрацию
+  -k, --kernel VER      Собрать и установить модуль для указанной версии ядра
+  -b, --branch BRANCH   Ветка VDS для клонирования (по умолчанию master)
+  -l, --local           Собирать текущее дерево, не клонировать репозиторий
   -h, --help            Показать эту справку и выйти
 
-Для подписи модуля и использовании в Secure Boot:
-Проверка включён ли Secure Boot:
+Для подписи модуля и использования в Secure Boot:
+Проверка, включён ли Secure Boot:
 mokutil --sb-state
 Импорт ключа:
 mokutil --import /var/lib/dkms/mok.pub
 
 EOF
-    # Явный --help завершается с 0; неизвестный аргумент - с 1 (ложный успех в CI).
-    exit "${HELP_EXIT_RC:-0}"
 }
 
-if [[ "$HELP" -eq 1 ]]; then show_help; fi
-if [[ "$INST_DEPS" -eq 1 ]]; then install_deps; fi
-if [[ "$RM_DEPS" -eq 1 ]]; then remove_deps; fi
-if [[ "$SETUP_MOD" -eq 1 ]]; then start_setup; fi
-#if [[ "$ADD_AWG" -eq 1 ]]; then add_awg_to_modules && exit 0; fi
-if [[ "$CHK_AWG" -eq 1 ]]; then check_module && exit 0; fi
-if [[ "$ADD_WG" -eq 1 ]]; then add_wg_to_modules && exit 0; fi
-if [[ "$DEL_AWG" -eq 1 ]]; then del_awg_from_modules && exit 0; fi
-if [[ "$DEL_WG" -eq 1 ]]; then del_wg_from_modules && exit 0; fi
-if [[ "$REINSTALL" -eq 1 ]]; then start_remove && start_setup; fi
-if [[ "$UNINSTALL" -eq 1 ]]; then start_remove; fi
+install_deps() {
+    dnf update -y || return 1
+    dnf install -y dkms || return 1
+    log "Зависимости установлены."
+}
+
+remove_deps() {
+    dnf remove -y dkms || return 1
+    log "Зависимости удалены."
+}
+
+add_awg_to_modules() {
+    mkdir -p "$(dirname "$amf")" || return 1
+    if ! grep -qxF 'amneziawg' "$amf" 2>/dev/null; then
+        echo "amneziawg" > "$amf" || { warn "Write error $amf"; return 1; }
+        log "Добавлено в $amf."
+    fi
+}
+
+del_awg_from_modules() {
+    rm -f "$amf" || { warn "Remove error $amf"; return 1; }
+    log "$amf удалён."
+}
+
+add_wg_to_modules() {
+    mkdir -p "$(dirname "$wmf")" || return 1
+    if ! grep -qxF 'wireguard' "$wmf" 2>/dev/null; then
+        echo "wireguard" > "$wmf" || { warn "Write error $wmf"; return 1; }
+        log "Добавлено в $wmf."
+    fi
+}
+
+del_wg_from_modules() {
+    rm -f "$wmf" || { warn "Remove error $wmf"; return 1; }
+    log "$wmf удалён."
+}
+
+update_kernel() {
+    local ver="${KERNEL_VERSION:-}"
+    local pkg_ver
+    local arch
+    arch="$(uname -m)"
+
+    if [ -z "$ver" ]; then
+        KERNEL_VERSION="$(uname -r)"
+        log "Версия ядра не указана, используется текущая: $KERNEL_VERSION"
+        return 0
+    fi
+
+    if [ "$ver" = "$(uname -r)" ] && [ -d "/lib/modules/${ver}/build" ]; then
+        log "Ядро $ver уже работает, заголовки на месте."
+        return 0
+    fi
+
+    pkg_ver="$ver"
+    case "$pkg_ver" in
+        *."$arch") pkg_ver="${pkg_ver%.*}" ;;
+    esac
+
+    log "Установка ядра $pkg_ver и заголовков."
+    dnf install -y "kernel-${pkg_ver}" "kernel-devel-${pkg_ver}" "kernel-headers-${pkg_ver}" || {
+        err "Не удалось установить ядро $pkg_ver."
+        return 1
+    }
+
+    if [ ! -d "/lib/modules/${ver}/build" ]; then
+        err "Заголовки для ядра $ver не найдены после установки."
+        return 1
+    fi
+
+    log "Ядро $ver установлено; сборка будет выполнена для него."
+}
+
+start_setup() {
+    local mod_ver
+    local src_dir
+
+    update_kernel || return $?
+
+    if ! dnf list installed dkms >/dev/null 2>&1; then
+        install_deps || return $?
+    fi
+
+    if [ "$LOCAL_BUILD" -eq 1 ]; then
+        src_dir="$(pwd)/src"
+        if [ ! -d "$src_dir" ]; then
+            err "Каталог src не найден в $(pwd)."
+            return 1
+        fi
+        log "Сборка локального дерева: $src_dir"
+    else
+        rm -rf "$setup_tmp"
+        git clone --branch "$MOD_BRANCH" "https://github.com/${mod_repo_owner}/${mod_repo}.git" "$setup_tmp" || return 1
+        src_dir="${setup_tmp}/src"
+    fi
+
+    mod_ver="$(make -C "$src_dir" print-version)" || return 1
+    if [ -z "$mod_ver" ]; then
+        err "Не удалось определить версию модуля."
+        return 1
+    fi
+
+    make -C "$src_dir" dkms-install || return 1
+
+    if [ -n "$KERNEL_VERSION" ]; then
+        dkms install -m amneziawg -v "$mod_ver" -k "$KERNEL_VERSION" || return 1
+    else
+        dkms install -m amneziawg -v "$mod_ver" || return 1
+    fi
+
+    add_awg_to_modules || return 1
+    log "Установлен amneziawg $mod_ver для ядра ${KERNEL_VERSION:-$(uname -r)}."
+}
+
+start_remove() {
+    local ver
+
+    ver="$(dkms status -m amneziawg 2>/dev/null | awk -F'[/, ]+' '{print $2}' | head -n1)"
+    if [ -n "$ver" ]; then
+        dkms remove "amneziawg/${ver}" --all || return 1
+        log "Удалена регистрация DKMS amneziawg/${ver}."
+    else
+        warn "Регистрация DKMS amneziawg не найдена."
+    fi
+
+    del_awg_from_modules || return 1
+    del_wg_from_modules || return 1
+}
+
+load_module() {
+    local out
+    if ! out="$(modprobe amneziawg 2>&1)"; then
+        err "Модуль не загрузился: $out"
+        return 1
+    fi
+    return 0
+}
+
+check_module() {
+    if ! lsmod | grep -q -w amneziawg; then
+        log "Модуль не загружен, загружаю."
+        load_module || return 1
+        log "Модуль загружен."
+        add_awg_to_modules || return 1
+    else
+        log "Модуль amneziawg загружен."
+    fi
+
+    log "Информация о модуле:"
+    modinfo amneziawg | grep -E "filename|version|vermagic|srcversion" || true
+}
+
+set_action() {
+    if [ -n "$ACTION" ]; then
+        err "Можно указать только одно действие."
+        return 1
+    fi
+    ACTION="$1"
+}
+
+# Parse arguments
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -d|deps)          set_action deps      || exit 1 ;;
+        -rd|rmdeps)       set_action rmdeps    || exit 1 ;;
+        -s|setup)         set_action setup     || exit 1 ;;
+        -aa|addawg)       set_action addawg    || exit 1 ;;
+        -ca|chkawg)       set_action chkawg    || exit 1 ;;
+        -aw|addwg)        set_action addwg     || exit 1 ;;
+        -da|delawg)       set_action delawg    || exit 1 ;;
+        -dw|delwg)        set_action delwg     || exit 1 ;;
+        -r|reinstall)     set_action reinstall || exit 1 ;;
+        -u|uninstall)     set_action uninstall || exit 1 ;;
+        -k|--kernel)
+            shift
+            [ "$#" -gt 0 ] || { err "Не указана версия ядра."; show_help; exit 1; }
+            KERNEL_VERSION="$1"
+            ;;
+        -b|--branch)
+            shift
+            [ "$#" -gt 0 ] || { err "Не указана ветка."; show_help; exit 1; }
+            MOD_BRANCH="$1"
+            ;;
+        -l|--local)       LOCAL_BUILD=1 ;;
+        -h|--help)        show_help; exit 0 ;;
+        *)                err "Неизвестный аргумент: $1"; show_help; exit 1 ;;
+    esac
+    shift
+done
+
+case "$ACTION" in
+    "")        show_help; exit 0 ;;
+    help)      show_help; exit 0 ;;
+esac
+
+[ "$(id -u)" -eq 0 ] || { err "Запускайте от root."; exit 1; }
+
+case "$ACTION" in
+    deps)      install_deps;      exit $? ;;
+    rmdeps)    remove_deps;       exit $? ;;
+    setup)     start_setup;       exit $? ;;
+    addawg)    add_awg_to_modules; exit $? ;;
+    chkawg)    check_module;      exit $? ;;
+    addwg)     add_wg_to_modules; exit $? ;;
+    delawg)    del_awg_from_modules; exit $? ;;
+    delwg)     del_wg_from_modules;  exit $? ;;
+    reinstall) start_remove || exit $?; start_setup; exit $? ;;
+    uninstall) start_remove;      exit $? ;;
+    *)         err "Неизвестное действие: $ACTION"; show_help; exit 1 ;;
+esac

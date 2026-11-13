@@ -3,7 +3,7 @@
 # Copyright (C) 2015-2019 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.
 
 # Единственный источник версии — version.h (правило 9 в .agents/02-rules.md).
-WIREGUARD_VERSION := $(shell sed -n 's/^[[:space:]]*#define[[:space:]]\{1,\}WIREGUARD_VERSION[[:space:]]\{1,\}"\(.*\)"/\1/p' version.h 2>/dev/null | head -n1)
+WIREGUARD_VERSION := $(shell sed -n 's/.*WIREGUARD_VERSION[[:space:]]*"\([^"]*\)".*/\1/p' version.h 2>/dev/null | head -n1)
 ifeq ($(strip $(WIREGUARD_VERSION)),)
 $(error WIREGUARD_VERSION is not defined in version.h)
 endif

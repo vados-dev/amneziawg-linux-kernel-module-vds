@@ -4,45 +4,107 @@ on:
 #  schedule:
 #    - cron: "0 9 * * 1" # Monday 09:00 UTC
   workflow_dispatch:
+    inputs:
+      manual_tag:
+        description: "Upstream tag to check (overrides DEFAULT_TAG and the latest tag)"
+        required: false
+        type: string
 
 permissions:
+  contents: read
   issues: write
+
+env:
+  UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - name: Compare upstream latest with our base version
+      - name: Resolve target upstream tag
+        id: resolve
+        env:
+          MANUAL_TAG: ${{ inputs.manual_tag }}
+          DEFAULT_TAG: ${{ vars.DEFAULT_TAG }}
+        run: |
+          set -euo pipefail
+          tag="${MANUAL_TAG:-}"
+          if [ -z "$tag" ]; then
+            tag="${DEFAULT_TAG:-}"
+          fi
+          if [ -z "$tag" ]; then
+            tag="$(git ls-remote --tags --refs --sort=-v:refname \
+              "https://github.com/${UPSTREAM_REPO}.git" \
+              | awk -F/ '{print $NF}' | head -n1)"
+          fi
+          if [ -z "$tag" ]; then
+            echo "::error::Could not resolve upstream tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Compare with internal/config/version
+        id: compare
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          base="v$(tr -d '[:space:]' < internal/config/version)"
+          echo "upstream=$TAG base=$base"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          if [ "$TAG" = "$base" ]; then
+            echo "in_sync=true" >> "$GITHUB_OUTPUT"
+            echo "in sync — nothing to do"
+          else
+            echo "in_sync=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create migration issue
+        if: steps.compare.outputs.in_sync == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+          BASE: ${{ steps.compare.outputs.base }}
+          REPO: ${{ github.repository }}
         run: |
-          UPSTREAM=$(gh api repos/amnezia-vpn/amneziawg-linux-kernel-module/releases/tag/latest --jq .tag_name)
-          BASE="v$(tr -d '[:space:]' < internal/config/version)"
-          echo "upstream=$UPSTREAM base=$BASE"
-          if [ "$UPSTREAM" = "$BASE" ]; then
-            echo "in sync — nothing to do"
+          set -euo pipefail
+          title="Upstream ${TAG} released — VDS migration needed (base: ${BASE})"
+          open="$(gh issue list --repo "$REPO" --state open --search "in:title \"${TAG}\"" --json number --jq length)"
+          if [ "$open" -gt 0 ]; then
+            echo "issue for ${TAG} already open — not duplicating"
             exit 0
           fi
-          TITLE="Upstream $UPSTREAM released — migration needed (base: $BASE)"
-          OPEN=$(gh issue list --repo "${{ github.repository }}" --state open --search "in:title \"$UPSTREAM\"" --json number --jq length)
-          if [ "$OPEN" -gt 0 ]; then
-            echo "issue for $UPSTREAM already open — not duplicating"
-            exit 0
-          fi
-          gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "$(cat <<EOF
-          Upstream [amnezia-vpn/amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module) released **$UPSTREAM**; our base is **$BASE**.
+          body="$(cat <<EOF
+          Upstream [${UPSTREAM_REPO}](https://github.com/${UPSTREAM_REPO}) released **${TAG}**; VDS base is **${BASE}**.
 
-          Migration procedure (AGENTS.md rule 8):
-          1. Fresh branch from \`origin/main\`
-          2. \`git checkout <old-branch> -- <isolated-lucx-files>\`
-          3. Manually re-apply LUCX-HOOK blocks to changed upstream files
-          4. \`go build ./internal/awg/... ./internal/lucx/...\` + tests + frontend typecheck
-          5. Bump \`internal/config/version\` if upstream changed it
+          ## VDS migration checklist
+          - [ ] Run \`merge.yml\` with \`upstream_tag=${TAG}\` and the tested kernel version.
+          - [ ] Verify the ISRHEL10/ISRHEL100/ISRHEL101 guards in \`src/compat/compat.h\`.
+          - [ ] Update \`internal/config/upstream\` and \`internal/config/version\`.
+          - [ ] Bump \`internal/config/current\` and \`src/version.h\` to the new \`-vds\` version.
+          - [ ] Run \`stable.yml\` after a successful merge.
+          - [ ] Update \`docs/CHANGELOG.md\`.
 
-          Changelog: https://github.com/amnezia-vpn/amneziawg-linux-kernel-module/releases/tag/$UPSTREAM
-
-          _File opened automatically by the upstream-watch workflow._
+          Changelog: https://github.com/${UPSTREAM_REPO}/releases/tag/${TAG}
           EOF
           )"
+          gh issue create --repo "$REPO" --title "$title" --body "$body"
+
+      - name: Notify Telegram on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+            echo "Telegram secrets are not configured — skipping notification"
+            exit 0
+          fi
+          text="check-upstream failed for ${TAG:-unknown tag}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${text}" > /dev/null

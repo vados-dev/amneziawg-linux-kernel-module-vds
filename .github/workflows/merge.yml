@@ -1,1 +1,129 @@
 name: Merge Upstream
+
+# TODO: This is a working skeleton. The merge step copies upstream-owned
+# directories and overlays internal/vds/src. Refine the file list before
+# enabling automatic runs.
+on:
+#  workflow_run:
+#    workflows: ["Check Upstream"]
+#    types: [completed]
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Upstream tag or branch (for example v3.1.20260812)"
+        required: true
+        type: string
+      kernel_version:
+        description: "Target kernel version (for example 6.12.0-273.el10.x86_64)"
+        required: true
+        type: string
+      vds_branch:
+        description: "VDS branch to merge into"
+        required: false
+        default: master
+        type: string
+      dry_run:
+        description: "Do not push merge results"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+  UPSTREAM_REF: ${{ inputs.upstream_ref }}
+  KERNEL_VERSION: ${{ inputs.kernel_version }}
+  VDS_BRANCH: ${{ inputs.vds_branch }}
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/centos/centos:stream10
+      options: --privileged
+    steps:
+      - name: Checkout VDS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VDS_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/vds
+          git clone --branch "$VDS_BRANCH" \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${VDS_REPO}.git" /tmp/vds
+
+      - name: Install base tools
+        run: |
+          set -euo pipefail
+          dnf install -y git make gcc tar gzip which
+          bash /tmp/vds/scripts/setup.sh -d
+
+      - name: Fetch upstream
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/upstream
+          git clone --depth 1 --branch "$UPSTREAM_REF" \
+            "https://github.com/${UPSTREAM_REPO}.git" /tmp/upstream
+          [ -d /tmp/upstream/src ] || { echo "::error::upstream src not found"; exit 1; }
+
+      - name: Prepare merged tree
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/vds-merge
+          mkdir -p /tmp/vds-merge
+          cp -a /tmp/vds/. /tmp/vds-merge/
+
+          # Replace upstream-owned directories with the fresh upstream copy.
+          rm -rf /tmp/vds-merge/src /tmp/vds-merge/debian /tmp/vds-merge/kernel-tree-scripts
+          cp -a /tmp/upstream/src /tmp/vds-merge/
+          [ -d /tmp/upstream/debian ] && cp -a /tmp/upstream/debian /tmp/vds-merge/ || true
+          [ -d /tmp/upstream/kernel-tree-scripts ] && cp -a /tmp/upstream/kernel-tree-scripts /tmp/vds-merge/ || true
+
+          # Apply the VDS overlay (changed files only).
+          [ -d /tmp/vds-merge/internal/vds/src ] || { echo "::error::internal/vds/src not found"; exit 1; }
+          cp -a /tmp/vds-merge/internal/vds/src/. /tmp/vds-merge/src/
+
+          # Keep the VDS version scheme.
+          upstream_version="${UPSTREAM_REF#v}"
+          printf '%s\n' "$upstream_version" > /tmp/vds-merge/internal/config/version
+          printf '%s\n' "$UPSTREAM_REF" > /tmp/vds-merge/internal/config/upstream
+          printf '%s-vds\n' "$upstream_version" > /tmp/vds-merge/internal/config/current
+          sed -i "s/^#define WIREGUARD_VERSION .*/#define WIREGUARD_VERSION \"${upstream_version}-vds\"/" \
+            /tmp/vds-merge/src/version.h
+
+      - name: Build and test the merged tree
+        working-directory: /tmp/vds-merge
+        run: |
+          set -euo pipefail
+          bash scripts/setup.sh -l -k "$KERNEL_VERSION" -s
+          make -C src print-version
+
+      - name: Push merge result
+        if: ${{ !inputs.dry_run }}
+        working-directory: /tmp/vds-merge
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Merge upstream ${UPSTREAM_REF}" || true
+          git push origin "HEAD:${VDS_BRANCH}"
+
+      - name: Notify Telegram on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+            echo "Telegram secrets are not configured — skipping notification"
+            exit 0
+          fi
+          text="merge.yml failed for ${UPSTREAM_REF:-unknown ref}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${text}" > /dev/null
