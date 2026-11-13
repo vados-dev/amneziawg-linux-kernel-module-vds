@@ -217,4 +217,3 @@ jobs:
               gh api -X DELETE -H "Accept: application/vnd.github+json" "/users/${owner_lc}/packages/container/${package_name_enc}/versions/${id}"
             done
           done
-
