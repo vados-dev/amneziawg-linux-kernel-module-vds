@@ -105,6 +105,55 @@ flowchart LR
 5. Блок `environment: telegram` добавлен во все три workflows; владельцу нужно создать
    окружение `telegram` и добавить в него `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID`.
 
+## Phase D: единый контракт уведомлений
+
+Статус: реализовано 13.11.2026 16:15 MSK, ожидает проверки запуском владельцем.
+Отчёт — `.agents/logs/202611131615-reports.md`. Основание — `06-debug.md` (13.11.2026 16:15)
+и лог `.agents/logs/debug/131120261554-check-upstream.yml.log`.
+
+Проблема: при одновременно включённых `NOTIFY_ON_UPDATE` и `NOTIFY_ON_RESULT`
+`check-upstream.yml` отправлял два Telegram-сообщения об одном событии, а сам
+`NOTIFY_ON_UPDATE` управлял не уведомлением, а запретом автозапуска `merge.yml`.
+
+Целевая схема:
+
+```mermaid
+flowchart TD
+  A[check-upstream.yml] --> B{in_sync}
+  B -->|true| N0{notify_mode always}
+  B -->|false| C[issue создано]
+  C --> D{auto_merge}
+  D -->|true| M[merge.yml]
+  D -->|false| N1[одно сообщение: новый тег, merge не запущен]
+  M --> S[stable.yml]
+  M --> N2[одно сообщение: итог merge]
+  S --> N3[одно сообщение: итог stable]
+  N0 -->|да| N4[одно сообщение: всё в синхроне]
+```
+
+Контракт:
+- `notify_mode` — `choice` в `workflow_dispatch`, `string` в `workflow_call`;
+  значения `none|inherit|changes|always`, default `none`.
+- `none` и `inherit` не переопределяют env: действует `vars.NOTIFY_MODE`,
+  при пустом значении — `changes` (прежнее поведение: сбои сообщаются всегда).
+- `changes` и `always` имеют приоритет над env.
+- `changes` — только значимое событие или сбой; `always` — плюс «ничего не изменилось».
+- `vars.TELEGRAM_NOTIFY=false` — глобальный kill-switch, отключает всё независимо от режима.
+- `auto_merge` (boolean, default `false`) — единственный переключатель автозапуска `merge.yml`;
+  `run_merge` и `NOTIFY_ON_UPDATE` удалены.
+- Один шаг уведомления на прогон: два сообщения физически невозможны.
+
+Порядок выполнения:
+1. `check-upstream.yml`: `auto_merge`, `notify_mode`, шаг `Resolve notification mode`,
+   единый шаг `Notify Telegram`.
+2. `merge.yml`: `notify_mode` в обоих триггерах, выход job `notify_mode`,
+   передача в `stable.yml`, уведомление о корневых файлах под режимом.
+3. `stable.yml`: `notify_mode` в `workflow_call`, единый шаг уведомления.
+4. Проверка: разбор YAML, отсутствие `NOTIFY_ON_UPDATE`/`NOTIFY_ON_RESULT`/`run_merge`.
+
+Критерий: `notify_mode=none` — ни одного сообщения; `changes` — одно сообщение только
+при новом теге или сбое; `always` — одно сообщение на любой исход.
+
 ## Выполненные этапы
 
 - [x] Phase A — документация `.agents`, README и INSTALL.
