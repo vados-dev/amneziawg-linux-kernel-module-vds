@@ -1,0 +1,269 @@
+2026-11-13T12:52:19.6362847Z Current runner version: '2.338.2'
+2026-11-13T12:52:19.6380867Z ##[group]Runner Image Provisioner
+2026-11-13T12:52:19.6381632Z Hosted Compute Agent
+2026-11-13T12:52:19.6382109Z Version: 20261103.629
+2026-11-13T12:52:19.6383040Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-13T12:52:19.6383624Z Build Date: 2026-11-03T17:26:59Z
+2026-11-13T12:52:19.6384187Z Worker ID: {c5d98453-4951-44f2-9069-ef6defbc3bdf}
+2026-11-13T12:52:19.6384819Z Region: us-west-2
+2026-11-13T12:52:19.6385240Z Cloud: AWS
+2026-11-13T12:52:19.6385656Z ##[endgroup]
+2026-11-13T12:52:19.6386679Z ##[group]Operating System
+2026-11-13T12:52:19.6387209Z Ubuntu
+2026-11-13T12:52:19.6387601Z 24.04.5
+2026-11-13T12:52:19.6387975Z LTS
+2026-11-13T12:52:19.6388364Z ##[endgroup]
+2026-11-13T12:52:19.6388798Z ##[group]Runner Image
+2026-11-13T12:52:19.6389268Z Image: ubuntu-24.04
+2026-11-13T12:52:19.6389699Z Version: 20261111.127.1
+2026-11-13T12:52:19.6390724Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261111.127/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-13T12:52:19.6391966Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261111.127
+2026-11-13T12:52:19.6392971Z ##[endgroup]
+2026-11-13T12:52:19.6393937Z ##[group]GITHUB_TOKEN Permissions
+2026-11-13T12:52:19.6395745Z Actions: write
+2026-11-13T12:52:19.6396165Z Contents: read
+2026-11-13T12:52:19.6396624Z Issues: write
+2026-11-13T12:52:19.6397037Z Metadata: read
+2026-11-13T12:52:19.6397442Z ##[endgroup]
+2026-11-13T12:52:19.6398896Z Secret source: Actions
+2026-11-13T12:52:19.6399581Z Cache mode: write
+2026-11-13T12:52:19.6400185Z Prepare workflow directory
+2026-11-13T12:52:19.6760714Z Prepare all required actions
+2026-11-13T12:52:19.6816646Z Getting action download info
+2026-11-13T12:52:20.0230411Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-13T12:52:22.4219994Z Complete job name: check
+2026-11-13T12:52:22.4941630Z ##[group]Run actions/checkout@v4
+2026-11-13T12:52:22.4943310Z with:
+2026-11-13T12:52:22.4944324Z   repository: vados-dev/amneziawg-linux-kernel-module-vds
+2026-11-13T12:52:22.4951336Z   token: ***
+2026-11-13T12:52:22.4952116Z   ssh-strict: true
+2026-11-13T12:52:22.4953142Z   ssh-user: git
+2026-11-13T12:52:22.4953983Z   persist-credentials: true
+2026-11-13T12:52:22.4954890Z   clean: true
+2026-11-13T12:52:22.4955696Z   sparse-checkout-cone-mode: true
+2026-11-13T12:52:22.4956623Z   fetch-depth: 1
+2026-11-13T12:52:22.4957428Z   fetch-tags: false
+2026-11-13T12:52:22.4958261Z   show-progress: true
+2026-11-13T12:52:22.4959094Z   lfs: false
+2026-11-13T12:52:22.4959866Z   submodules: false
+2026-11-13T12:52:22.4960685Z   set-safe-directory: true
+2026-11-13T12:52:22.4961644Z   allow-unsafe-pr-checkout: false
+2026-11-13T12:52:22.4963091Z env:
+2026-11-13T12:52:22.4964076Z   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+2026-11-13T12:52:22.4965274Z   NOTIFY_ON_UPDATE: true
+2026-11-13T12:52:22.4966255Z   NOTIFY_ON_RESULT: true
+2026-11-13T12:52:22.4967123Z ##[endgroup]
+2026-11-13T12:52:22.9749078Z Syncing repository: vados-dev/amneziawg-linux-kernel-module-vds
+2026-11-13T12:52:22.9750571Z ##[group]Getting Git version info
+2026-11-13T12:52:22.9751165Z Working directory is '/home/runner/work/amneziawg-linux-kernel-module-vds/amneziawg-linux-kernel-module-vds'
+2026-11-13T12:52:22.9751976Z [command]/usr/bin/git version
+2026-11-13T12:52:23.2847493Z git version 2.56.1
+2026-11-13T12:52:23.2862605Z ##[endgroup]
+2026-11-13T12:52:23.2873799Z Temporarily overriding HOME='/home/runner/work/_temp/9a170e58-fdc1-4516-9569-18288a0cc114' before making global git config changes
+2026-11-13T12:52:23.2874761Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-13T12:52:23.2877566Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/amneziawg-linux-kernel-module-vds/amneziawg-linux-kernel-module-vds
+2026-11-13T12:52:23.3347668Z Deleting the contents of '/home/runner/work/amneziawg-linux-kernel-module-vds/amneziawg-linux-kernel-module-vds'
+2026-11-13T12:52:23.3350093Z ##[group]Initializing the repository
+2026-11-13T12:52:23.3354984Z [command]/usr/bin/git init /home/runner/work/amneziawg-linux-kernel-module-vds/amneziawg-linux-kernel-module-vds
+2026-11-13T12:52:23.4833707Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-13T12:52:23.4834410Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-13T12:52:23.4834952Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-13T12:52:23.4835389Z hint: call:
+2026-11-13T12:52:23.4835666Z hint:
+2026-11-13T12:52:23.4836072Z hint: 	git config --global init.defaultBranch <name>
+2026-11-13T12:52:23.4836417Z hint:
+2026-11-13T12:52:23.4836762Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-13T12:52:23.4837344Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-13T12:52:23.4837740Z hint:
+2026-11-13T12:52:23.4838109Z hint: 	git branch -m <name>
+2026-11-13T12:52:23.4838486Z hint:
+2026-11-13T12:52:23.4838975Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-13T12:52:23.4839949Z Initialized empty Git repository in /home/runner/work/amneziawg-linux-kernel-module-vds/amneziawg-linux-kernel-module-vds/.git/
+2026-11-13T12:52:23.4850257Z [command]/usr/bin/git remote add origin https://github.com/vados-dev/amneziawg-linux-kernel-module-vds
+2026-11-13T12:52:23.4895879Z ##[endgroup]
+2026-11-13T12:52:23.4898837Z ##[group]Disabling automatic garbage collection
+2026-11-13T12:52:23.4899289Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-13T12:52:23.4921893Z ##[endgroup]
+2026-11-13T12:52:23.4922877Z ##[group]Setting up auth
+2026-11-13T12:52:23.4927707Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-13T12:52:23.4954031Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-13T12:52:23.9677174Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-13T12:52:23.9701710Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-13T12:52:23.9853207Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-13T12:52:23.9879146Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-13T12:52:24.0031518Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-13T12:52:24.0057185Z ##[endgroup]
+2026-11-13T12:52:24.0057871Z ##[group]Fetching the repository
+2026-11-13T12:52:24.0070031Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +51dc63dbaf99a0bae4ca9d78bceaaccc97197934:refs/remotes/origin/master
+2026-11-13T12:52:24.5850898Z From https://github.com/vados-dev/amneziawg-linux-kernel-module-vds
+2026-11-13T12:52:24.5851728Z  * [new ref]         51dc63dbaf99a0bae4ca9d78bceaaccc97197934 -> origin/master
+2026-11-13T12:52:24.5855383Z ##[endgroup]
+2026-11-13T12:52:24.5857337Z ##[group]Determining the checkout info
+2026-11-13T12:52:24.5857966Z ##[endgroup]
+2026-11-13T12:52:24.5862132Z [command]/usr/bin/git sparse-checkout disable
+2026-11-13T12:52:24.5937135Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-13T12:52:24.5956999Z ##[group]Checking out the ref
+2026-11-13T12:52:24.5960182Z [command]/usr/bin/git checkout --progress --force -B master refs/remotes/origin/master
+2026-11-13T12:52:24.6101239Z Reset branch 'master'
+2026-11-13T12:52:24.6109545Z branch 'master' set up to track 'origin/master'.
+2026-11-13T12:52:24.6113168Z ##[endgroup]
+2026-11-13T12:52:24.6147482Z [command]/usr/bin/git log -1 --format=%H
+2026-11-13T12:52:24.6165190Z 51dc63dbaf99a0bae4ca9d78bceaaccc97197934
+2026-11-13T12:52:24.6325643Z ##[group]Run set -euo pipefail
+2026-11-13T12:52:24.6326181Z [36;1mset -euo pipefail[0m
+2026-11-13T12:52:24.6326453Z [36;1m[0m
+2026-11-13T12:52:24.6326740Z [36;1mnormalize() {[0m
+2026-11-13T12:52:24.6327103Z [36;1m  local t="${1#refs/tags/}"[0m
+2026-11-13T12:52:24.6327384Z [36;1m  printf '%s' "${t#v}"[0m
+2026-11-13T12:52:24.6327711Z [36;1m}[0m
+2026-11-13T12:52:24.6327929Z [36;1m[0m
+2026-11-13T12:52:24.6328180Z [36;1mremote_tags() {[0m
+2026-11-13T12:52:24.6328556Z [36;1m  git ls-remote --tags --refs "https://github.com/${UPSTREAM_REPO}.git" \[0m
+2026-11-13T12:52:24.6328968Z [36;1m    | awk -F/ '{print $NF}'[0m
+2026-11-13T12:52:24.6329230Z [36;1m}[0m
+2026-11-13T12:52:24.6329440Z [36;1m[0m
+2026-11-13T12:52:24.6329668Z [36;1mtags="$(remote_tags)"[0m
+2026-11-13T12:52:24.6329908Z [36;1m[0m
+2026-11-13T12:52:24.6330194Z [36;1mtag="${MANUAL_TAG:-}"[0m
+2026-11-13T12:52:24.6330518Z [36;1mif [ -z "$tag" ]; then[0m
+2026-11-13T12:52:24.6330973Z [36;1m  tag="${DEFAULT_TAG:-}"[0m
+2026-11-13T12:52:24.6331229Z [36;1mfi[0m
+2026-11-13T12:52:24.6331542Z [36;1mif [ -z "$tag" ]; then[0m
+2026-11-13T12:52:24.6331923Z [36;1m  tag="$(printf '%s\n' "$tags" | sort -V | tail -n1)"[0m
+2026-11-13T12:52:24.6332223Z [36;1mfi[0m
+2026-11-13T12:52:24.6332784Z [36;1m[0m
+2026-11-13T12:52:24.6333163Z [36;1m# Accept both v-prefixed and bare tags; branches are left untouched.[0m
+2026-11-13T12:52:24.6333580Z [36;1mif [ -n "$tag" ] && ! printf '%s\n' "$tags" | grep -qx "$tag"; then[0m
+2026-11-13T12:52:24.6333979Z [36;1m  if printf '%s\n' "$tags" | grep -qx "v${tag#v}"; then[0m
+2026-11-13T12:52:24.6334326Z [36;1m    tag="v${tag#v}"[0m
+2026-11-13T12:52:24.6334585Z [36;1m  fi[0m
+2026-11-13T12:52:24.6334802Z [36;1mfi[0m
+2026-11-13T12:52:24.6335013Z [36;1m[0m
+2026-11-13T12:52:24.6335272Z [36;1mif [ -z "$tag" ]; then[0m
+2026-11-13T12:52:24.6335564Z [36;1m  echo "::error::Could not resolve upstream tag"[0m
+2026-11-13T12:52:24.6335878Z [36;1m  exit 1[0m
+2026-11-13T12:52:24.6336099Z [36;1mfi[0m
+2026-11-13T12:52:24.6336355Z [36;1m[0m
+2026-11-13T12:52:24.6336639Z [36;1mecho "tag=$tag" >> "$GITHUB_OUTPUT"[0m
+2026-11-13T12:52:24.6336971Z [36;1mecho "tag_version=$(normalize "$tag")" >> "$GITHUB_OUTPUT"[0m
+2026-11-13T12:52:25.0267419Z shell: /usr/bin/bash -e {0}
+2026-11-13T12:52:25.0267850Z env:
+2026-11-13T12:52:25.0268146Z   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+2026-11-13T12:52:25.0268511Z   NOTIFY_ON_UPDATE: true
+2026-11-13T12:52:25.0268832Z   NOTIFY_ON_RESULT: true
+2026-11-13T12:52:25.0269061Z   MANUAL_TAG: 
+2026-11-13T12:52:25.0269288Z   DEFAULT_TAG: 
+2026-11-13T12:52:25.0269503Z ##[endgroup]
+2026-11-13T12:52:25.3748472Z ##[group]Run set -euo pipefail
+2026-11-13T12:52:25.3748823Z [36;1mset -euo pipefail[0m
+2026-11-13T12:52:25.3749154Z [36;1mbase="$(tr -d '[:space:]' < internal/config/version)"[0m
+2026-11-13T12:52:25.3749449Z [36;1mbase_version="${base#v}"[0m
+2026-11-13T12:52:25.3749802Z [36;1mecho "upstream=${TAG} (${TAG_VERSION}) base=v${base_version}"[0m
+2026-11-13T12:52:25.3750179Z [36;1mecho "base=v${base_version}" >> "$GITHUB_OUTPUT"[0m
+2026-11-13T12:52:25.3750556Z [36;1mif [ "$TAG_VERSION" = "$base_version" ]; then[0m
+2026-11-13T12:52:25.3750872Z [36;1m  echo "in_sync=true" >> "$GITHUB_OUTPUT"[0m
+2026-11-13T12:52:25.3751155Z [36;1m  echo "in sync — nothing to do"[0m
+2026-11-13T12:52:25.3751463Z [36;1melse[0m
+2026-11-13T12:52:25.3751700Z [36;1m  echo "in_sync=false" >> "$GITHUB_OUTPUT"[0m
+2026-11-13T12:52:25.3751993Z [36;1mfi[0m
+2026-11-13T12:52:25.3776406Z shell: /usr/bin/bash -e {0}
+2026-11-13T12:52:25.3776730Z env:
+2026-11-13T12:52:25.3777137Z   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+2026-11-13T12:52:25.3777454Z   NOTIFY_ON_UPDATE: true
+2026-11-13T12:52:25.3777940Z   NOTIFY_ON_RESULT: true
+2026-11-13T12:52:25.3778204Z   TAG: v3.1.20261113-02
+2026-11-13T12:52:25.3778490Z   TAG_VERSION: 3.1.20261113-02
+2026-11-13T12:52:25.3778838Z ##[endgroup]
+2026-11-13T12:52:25.3829562Z upstream=v3.1.20261113-02 (3.1.20261113-02) base=v3.1.20260812
+2026-11-13T12:52:25.3866801Z ##[group]Run set -euo pipefail
+2026-11-13T12:52:25.3867124Z [36;1mset -euo pipefail[0m
+2026-11-13T12:52:25.3867547Z [36;1mtitle="Upstream ${TAG} released — VDS migration needed (base: ${BASE})"[0m
+2026-11-13T12:52:25.3868126Z [36;1mexisting="$(gh issue list --repo "$REPO" --state open --search "in:title \"${TAG}\"" --json number,url --jq '.[0] // empty')"[0m
+2026-11-13T12:52:25.3868582Z [36;1mif [ -n "$existing" ]; then[0m
+2026-11-13T12:52:25.3868945Z [36;1m  echo "issue for ${TAG} already open — not duplicating"[0m
+2026-11-13T12:52:25.3869337Z [36;1m  echo "url=$(printf '%s' "$existing" | jq -r .url)" >> "$GITHUB_OUTPUT"[0m
+2026-11-13T12:52:25.3869678Z [36;1m  exit 0[0m
+2026-11-13T12:52:25.3869905Z [36;1mfi[0m
+2026-11-13T12:52:25.3870145Z [36;1mbody="$(cat <<EOF[0m
+2026-11-13T12:52:25.3870574Z [36;1mUpstream [${UPSTREAM_REPO}](https://github.com/${UPSTREAM_REPO}) released **${TAG}**; VDS base is **${BASE}**.[0m
+2026-11-13T12:52:25.3871015Z [36;1m[0m
+2026-11-13T12:52:25.3871347Z [36;1m## VDS migration checklist[0m
+2026-11-13T12:52:25.3871738Z [36;1m- [ ] Run \`merge.yml\` with \`upstream_ref=${TAG}\` and an empty \`kernel_version\` (latest kernel).[0m
+2026-11-13T12:52:25.3872228Z [36;1m- [ ] Verify the ISRHEL10/ISRHEL100/ISRHEL101 guards in \`src/compat/compat.h\`.[0m
+2026-11-13T12:52:25.3872906Z [36;1m- [ ] Review root-level upstream files reported by \`merge.yml\`.[0m
+2026-11-13T12:52:25.3873430Z [36;1m- [ ] Confirm \`internal/config/{current,version,upstream}\` and \`src/version.h\` after the merge.[0m
+2026-11-13T12:52:25.3873957Z [36;1m- [ ] \`stable.yml\` runs automatically from \`merge.yml\`; do not start it manually.[0m
+2026-11-13T12:52:25.3874354Z [36;1m- [ ] Update \`docs/CHANGELOG.md\`.[0m
+2026-11-13T12:52:25.3874614Z [36;1m[0m
+2026-11-13T12:52:25.3875023Z [36;1mChangelog: https://github.com/${UPSTREAM_REPO}/releases/tag/${TAG}[0m
+2026-11-13T12:52:25.3875361Z [36;1mEOF[0m
+2026-11-13T12:52:25.3875580Z [36;1m)"[0m
+2026-11-13T12:52:25.3875873Z [36;1murl="$(gh issue create --repo "$REPO" --title "$title" --body "$body")"[0m
+2026-11-13T12:52:25.3876263Z [36;1mecho "url=$url" >> "$GITHUB_OUTPUT"[0m
+2026-11-13T12:52:25.3896773Z shell: /usr/bin/bash -e {0}
+2026-11-13T12:52:25.3897102Z env:
+2026-11-13T12:52:25.3897376Z   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+2026-11-13T12:52:25.3897720Z   NOTIFY_ON_UPDATE: true
+2026-11-13T12:52:25.3897980Z   NOTIFY_ON_RESULT: true
+2026-11-13T12:52:25.3900022Z   GH_TOKEN: ***
+2026-11-13T12:52:25.3900251Z   TAG: v3.1.20261113-02
+2026-11-13T12:52:25.3900482Z   BASE: v3.1.20260812
+2026-11-13T12:52:25.3900780Z   REPO: vados-dev/amneziawg-linux-kernel-module-vds
+2026-11-13T12:52:25.3901097Z ##[endgroup]
+2026-11-13T12:52:30.4111842Z ##[group]Run set -euo pipefail
+2026-11-13T12:52:30.4112154Z [36;1mset -euo pipefail[0m
+2026-11-13T12:52:30.4112670Z [36;1mif [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then[0m
+2026-11-13T12:52:30.4113235Z [36;1m  echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"[0m
+2026-11-13T12:52:30.4113672Z [36;1m  exit 0[0m
+2026-11-13T12:52:30.4113916Z [36;1mfi[0m
+2026-11-13T12:52:30.4114470Z [36;1mtext="Upstream ${TAG} released. merge.yml was not started (NOTIFY_ON_UPDATE=true). Issue: ${ISSUE_URL:-none}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"[0m
+2026-11-13T12:52:30.4115215Z [36;1mcurl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \[0m
+2026-11-13T12:52:30.4115665Z [36;1m  --data-urlencode "chat_id=${TG_CHAT_ID}" \[0m
+2026-11-13T12:52:30.4115989Z [36;1m  --data-urlencode "text=${text}" > /dev/null[0m
+2026-11-13T12:52:30.4142057Z shell: /usr/bin/bash -e {0}
+2026-11-13T12:52:30.4142378Z env:
+2026-11-13T12:52:30.4142799Z   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+2026-11-13T12:52:30.4143163Z   NOTIFY_ON_UPDATE: true
+2026-11-13T12:52:30.4143541Z   NOTIFY_ON_RESULT: true
+2026-11-13T12:52:30.4143971Z   TG_TOKEN: ***
+2026-11-13T12:52:30.4144238Z   TG_CHAT_ID: ***
+2026-11-13T12:52:30.4144494Z   TAG: v3.1.20261113-02
+2026-11-13T12:52:30.4144853Z   ISSUE_URL: https://github.com/vados-dev/amneziawg-linux-kernel-module-vds/issues/2
+2026-11-13T12:52:30.4145237Z ##[endgroup]
+2026-11-13T12:52:34.3605846Z ##[group]Run set -euo pipefail
+2026-11-13T12:52:34.3606169Z [36;1mset -euo pipefail[0m
+2026-11-13T12:52:34.3606532Z [36;1mif [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then[0m
+2026-11-13T12:52:34.3607045Z [36;1m  echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"[0m
+2026-11-13T12:52:34.3607476Z [36;1m  exit 0[0m
+2026-11-13T12:52:34.3607743Z [36;1mfi[0m
+2026-11-13T12:52:34.3608293Z [36;1mtext="check-upstream: ${JOB_STATUS}. Upstream: ${TAG:-unknown}. Issue: ${ISSUE_URL:-none}. Logs: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"[0m
+2026-11-13T12:52:34.3608999Z [36;1mcurl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \[0m
+2026-11-13T12:52:34.3609419Z [36;1m  --data-urlencode "chat_id=${TG_CHAT_ID}" \[0m
+2026-11-13T12:52:34.3609740Z [36;1m  --data-urlencode "text=${text}" > /dev/null[0m
+2026-11-13T12:52:34.3635849Z shell: /usr/bin/bash -e {0}
+2026-11-13T12:52:34.3636275Z env:
+2026-11-13T12:52:34.3636548Z   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+2026-11-13T12:52:34.3636937Z   NOTIFY_ON_UPDATE: true
+2026-11-13T12:52:34.3637327Z   NOTIFY_ON_RESULT: true
+2026-11-13T12:52:34.3637935Z   TG_TOKEN: ***
+2026-11-13T12:52:34.3638163Z   TG_CHAT_ID: ***
+2026-11-13T12:52:34.3638414Z   TAG: v3.1.20261113-02
+2026-11-13T12:52:34.3638675Z   JOB_STATUS: success
+2026-11-13T12:52:34.3639019Z   ISSUE_URL: https://github.com/vados-dev/amneziawg-linux-kernel-module-vds/issues/2
+2026-11-13T12:52:34.3639398Z ##[endgroup]
+2026-11-13T12:52:34.8969697Z Post job cleanup.
+2026-11-13T12:52:34.9609569Z [command]/usr/bin/git version
+2026-11-13T12:52:34.9633297Z git version 2.56.1
+2026-11-13T12:52:34.9653402Z Temporarily overriding HOME='/home/runner/work/_temp/12bf2f6d-c405-4a5c-b998-8b5512696a27' before making global git config changes
+2026-11-13T12:52:34.9654705Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-13T12:52:34.9656943Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/amneziawg-linux-kernel-module-vds/amneziawg-linux-kernel-module-vds
+2026-11-13T12:52:34.9687268Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-13T12:52:34.9710798Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-13T12:52:34.9867525Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-13T12:52:34.9892296Z http.https://github.com/.extraheader
+2026-11-13T12:52:34.9898916Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-13T12:52:34.9921616Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-13T12:52:35.0123005Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-13T12:52:35.0150174Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-13T12:52:35.0406429Z Cleaning up orphan processes
+2026-11-13T12:52:35.0662037Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
