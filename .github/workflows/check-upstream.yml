@@ -159,8 +159,8 @@ jobs:
             -f kernel_version="" \
             -f vds_branch="$DEFAULT_BRANCH" \
             -f dry_run="$DRY_RUN" \
-            -f NOTIFY_ON_UPDATE="$NOTIFY_ON_UPDATE" \
-            -f NOTIFY_ON_RESULT="$NOTIFY_ON_RESULT"
+            -F NOTIFY_ON_UPDATE="$NOTIFY_ON_UPDATE" \
+            -F NOTIFY_ON_RESULT="$NOTIFY_ON_RESULT"
 
       - name: Notify Telegram about upstream update
         if: ${{ steps.compare.outputs.in_sync == 'false' && env.NOTIFY_ON_UPDATE == 'true' }}
