@@ -1,0 +1,116 @@
+2026-11-13T10:49:18.3972626Z Current runner version: '2.338.2'
+2026-11-13T10:49:18.3998573Z ##[group]Runner Image Provisioner
+2026-11-13T10:49:18.3999593Z Hosted Compute Agent
+2026-11-13T10:49:18.4000196Z Version: 20261028.624
+2026-11-13T10:49:18.4000890Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-13T10:49:18.4001679Z Build Date: 2026-10-28T21:51:42Z
+2026-11-13T10:49:18.4002368Z Worker ID: {587ebd96-1dae-4484-8325-91aa0ef47e47}
+2026-11-13T10:49:18.4003120Z Region: westus
+2026-11-13T10:49:18.4003659Z Cloud: Azure
+2026-11-13T10:49:18.4004178Z ##[endgroup]
+2026-11-13T10:49:18.4006007Z ##[group]Operating System
+2026-11-13T10:49:18.4006732Z Ubuntu
+2026-11-13T10:49:18.4007355Z 26.04.1
+2026-11-13T10:49:18.4007867Z LTS
+2026-11-13T10:49:18.4008364Z ##[endgroup]
+2026-11-13T10:49:18.4009016Z ##[group]Runner Image
+2026-11-13T10:49:18.4009634Z Image: ubuntu-26.04
+2026-11-13T10:49:18.4010229Z Version: 20261101.186.1
+2026-11-13T10:49:18.4011507Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-13T10:49:18.4013158Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+2026-11-13T10:49:18.4014113Z ##[endgroup]
+2026-11-13T10:49:18.4015757Z ##[group]GITHUB_TOKEN Permissions
+2026-11-13T10:49:18.4017680Z Contents: write
+2026-11-13T10:49:18.4018369Z Issues: write
+2026-11-13T10:49:18.4018993Z Metadata: read
+2026-11-13T10:49:18.4019552Z ##[endgroup]
+2026-11-13T10:49:18.4022238Z Secret source: Actions
+2026-11-13T10:49:18.4023152Z Cache mode: write
+2026-11-13T10:49:18.4023976Z Prepare workflow directory
+2026-11-13T10:49:18.4657849Z Prepare all required actions
+2026-11-13T10:49:18.5584871Z Complete job name: merge
+2026-11-13T10:49:18.6446828Z ##[group]Checking docker version
+2026-11-13T10:49:18.6461087Z ##[command]/usr/bin/docker version --format '{{.Server.APIVersion}}'
+2026-11-13T10:49:18.7517053Z '1.54'
+2026-11-13T10:49:18.7541060Z Docker daemon API version: '1.54'
+2026-11-13T10:49:18.7542089Z ##[command]/usr/bin/docker version --format '{{.Client.APIVersion}}'
+2026-11-13T10:49:18.7745473Z '1.54'
+2026-11-13T10:49:18.7848901Z Docker client API version: '1.54'
+2026-11-13T10:49:18.7855876Z ##[endgroup]
+2026-11-13T10:49:18.7860213Z ##[group]Clean up resources from previous jobs
+2026-11-13T10:49:18.7865838Z ##[command]/usr/bin/docker ps --all --quiet --no-trunc --filter "label=97f271"
+2026-11-13T10:49:18.8046376Z ##[command]/usr/bin/docker network prune --force --filter "label=97f271"
+2026-11-13T10:49:18.8211744Z ##[endgroup]
+2026-11-13T10:49:18.8212306Z ##[group]Create local container network
+2026-11-13T10:49:18.8223058Z ##[command]/usr/bin/docker network create --label 97f271 github_network_ec2bdf7fc05c4a1dbecc564f70505fa2
+2026-11-13T10:49:18.8715753Z 077a58a0e79344c6c92c89292f2852da74ad10f9187f75bd1b3ab03d6b8c865b
+2026-11-13T10:49:18.8739949Z ##[endgroup]
+2026-11-13T10:49:18.8765753Z ##[group]Starting job container
+2026-11-13T10:49:18.8787874Z ##[command]/usr/bin/docker pull quay.io/centos/centos:stream10
+2026-11-13T10:49:19.4483190Z stream10: Pulling from centos/centos
+2026-11-13T10:49:19.7229984Z bd9ddc54bea9: Pulling fs layer
+2026-11-13T10:49:19.7231313Z cd580272b95b: Pulling fs layer
+2026-11-13T10:49:19.9991121Z bd9ddc54bea9: Download complete
+2026-11-13T10:49:20.1997694Z cd580272b95b: Download complete
+2026-11-13T10:49:21.7715863Z bd9ddc54bea9: Pull complete
+2026-11-13T10:49:21.7725488Z cd580272b95b: Pull complete
+2026-11-13T10:49:21.7726595Z Digest: sha256:5eaff839eea6ca355f8122044dcfaefbac5ac991940f223b668dcf80478e3166
+2026-11-13T10:49:21.7727715Z Status: Downloaded newer image for quay.io/centos/centos:stream10
+2026-11-13T10:49:21.7733340Z quay.io/centos/centos:stream10
+2026-11-13T10:49:21.7859848Z ##[command]/usr/bin/docker create --name b782454bb203474683be8b8b2fcb7bf5_quayiocentoscentosstream10_075048 --label 97f271 --workdir /__w/amneziawg-linux-kernel-module-vds/amneziawg-linux-kernel-module-vds --network github_network_ec2bdf7fc05c4a1dbecc564f70505fa2 --privileged -e "HOME=/github/home" -e GITHUB_ACTIONS=true -e CI=true -v "/var/run/docker.sock":"/var/run/docker.sock" -v "/home/runner/work":"/__w" -v "/home/runner/actions-runner/cached/2.338.2/externals":"/__e":ro -v "/home/runner/work/_temp":"/__w/_temp" -v "/home/runner/work/_actions":"/__w/_actions" -v "/opt/hostedtoolcache":"/__t" -v "/home/runner/work/_temp/_github_home":"/github/home" -v "/home/runner/work/_temp/_github_workflow":"/github/workflow" --entrypoint "tail" quay.io/centos/centos:stream10 "-f" "/dev/null"
+2026-11-13T10:49:22.0306142Z 1c20a689811dcdc5bb42fd52745babb12af27927663e1497110b3f282c626c84
+2026-11-13T10:49:22.0330507Z ##[command]/usr/bin/docker start 1c20a689811dcdc5bb42fd52745babb12af27927663e1497110b3f282c626c84
+2026-11-13T10:49:22.2420166Z 1c20a689811dcdc5bb42fd52745babb12af27927663e1497110b3f282c626c84
+2026-11-13T10:49:22.2445309Z ##[command]/usr/bin/docker ps --all --filter id=1c20a689811dcdc5bb42fd52745babb12af27927663e1497110b3f282c626c84 --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+2026-11-13T10:49:22.2654878Z 1c20a689811dcdc5bb42fd52745babb12af27927663e1497110b3f282c626c84 Up Less than a second
+2026-11-13T10:49:22.2679800Z ##[command]/usr/bin/docker inspect --format "{{range .Config.Env}}{{println .}}{{end}}" 1c20a689811dcdc5bb42fd52745babb12af27927663e1497110b3f282c626c84
+2026-11-13T10:49:22.2835397Z HOME=/github/home
+2026-11-13T10:49:22.2836062Z GITHUB_ACTIONS=true
+2026-11-13T10:49:22.2836572Z CI=true
+2026-11-13T10:49:22.2837176Z PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+2026-11-13T10:49:22.2863551Z ##[endgroup]
+2026-11-13T10:49:22.2873354Z ##[group]Waiting for all services to be ready
+2026-11-13T10:49:22.2875446Z ##[endgroup]
+2026-11-13T10:49:22.3115975Z ##[group]Run set -euo pipefail
+2026-11-13T10:49:22.3116484Z [36;1mset -euo pipefail[0m
+2026-11-13T10:49:22.3116807Z [36;1mrm -rf /tmp/vds[0m
+2026-11-13T10:49:22.3117134Z [36;1mgit clone --branch "$VDS_BRANCH" \[0m
+2026-11-13T10:49:22.3117838Z [36;1m  "https://x-access-token:${GITHUB_TOKEN}@github.com/${VDS_REPO}.git" /tmp/vds[0m
+2026-11-13T10:49:22.3122131Z shell: sh -e {0}
+2026-11-13T10:49:22.3122772Z env:
+2026-11-13T10:49:22.3123122Z   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+2026-11-13T10:49:22.3123531Z   UPSTREAM_REF: master
+2026-11-13T10:49:22.3123833Z   KERNEL_VERSION: 6.12.0-273.el10.x86_64
+2026-11-13T10:49:22.3124147Z   VDS_BRANCH: master
+2026-11-13T10:49:22.3127641Z   GITHUB_TOKEN: ***
+2026-11-13T10:49:22.3128016Z   VDS_REPO: vados-dev/amneziawg-linux-kernel-module-vds
+2026-11-13T10:49:22.3128406Z ##[endgroup]
+2026-11-13T10:49:22.3658222Z /__w/_temp/a93a0208-6802-4be6-a992-d273d67ba5af.sh: line 3: git: command not found
+2026-11-13T10:49:22.3703666Z ##[error]Process completed with exit code 127.
+2026-11-13T10:49:22.3851197Z ##[group]Run set -euo pipefail
+2026-11-13T10:49:22.3851613Z [36;1mset -euo pipefail[0m
+2026-11-13T10:49:22.3852038Z [36;1mif [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then[0m
+2026-11-13T10:49:22.3852626Z [36;1m  echo "Telegram secrets are not configured — skipping notification"[0m
+2026-11-13T10:49:22.3853105Z [36;1m  exit 0[0m
+2026-11-13T10:49:22.3853468Z [36;1mfi[0m
+2026-11-13T10:49:22.3854197Z [36;1mtext="merge.yml failed for ${UPSTREAM_REF:-unknown ref}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"[0m
+2026-11-13T10:49:22.3855440Z [36;1mcurl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \[0m
+2026-11-13T10:49:22.3856023Z [36;1m  --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \[0m
+2026-11-13T10:49:22.3856494Z [36;1m  --data-urlencode "text=${text}" > /dev/null[0m
+2026-11-13T10:49:22.3856949Z shell: sh -e {0}
+2026-11-13T10:49:22.3857197Z env:
+2026-11-13T10:49:22.3857566Z   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+2026-11-13T10:49:22.3857954Z   UPSTREAM_REF: master
+2026-11-13T10:49:22.3858233Z   KERNEL_VERSION: 6.12.0-273.el10.x86_64
+2026-11-13T10:49:22.3858550Z   VDS_BRANCH: master
+2026-11-13T10:49:22.3858815Z   TELEGRAM_BOT_TOKEN: 
+2026-11-13T10:49:22.3859073Z   TELEGRAM_CHAT_ID: 
+2026-11-13T10:49:22.3859594Z ##[endgroup]
+2026-11-13T10:49:22.4373864Z Telegram secrets are not configured — skipping notification
+2026-11-13T10:49:22.4432594Z Stop and remove container: b782454bb203474683be8b8b2fcb7bf5_quayiocentoscentosstream10_075048
+2026-11-13T10:49:22.4437580Z ##[command]/usr/bin/docker rm --force 1c20a689811dcdc5bb42fd52745babb12af27927663e1497110b3f282c626c84
+2026-11-13T10:49:22.5515958Z 1c20a689811dcdc5bb42fd52745babb12af27927663e1497110b3f282c626c84
+2026-11-13T10:49:22.5548564Z Remove container network: github_network_ec2bdf7fc05c4a1dbecc564f70505fa2
+2026-11-13T10:49:22.5552920Z ##[command]/usr/bin/docker network rm github_network_ec2bdf7fc05c4a1dbecc564f70505fa2
+2026-11-13T10:49:22.6221559Z github_network_ec2bdf7fc05c4a1dbecc564f70505fa2
+2026-11-13T10:49:22.6306019Z Cleaning up orphan processes

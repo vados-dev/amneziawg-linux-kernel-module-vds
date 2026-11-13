@@ -4,9 +4,9 @@ name: Merge Upstream
 # directories and overlays internal/vds/src. Refine the file list before
 # enabling automatic runs.
 on:
-#  workflow_run:
-#    workflows: ["Check Upstream"]
-#    types: [completed]
+  workflow_run:
+    workflows: ["Check Upstream"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       upstream_ref:
