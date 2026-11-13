@@ -223,7 +223,7 @@ jobs:
       - name: Delete requested tags from GHCR package
         shell: bash
         env:
-          # secrets.GITHUB_TOKEN тоже должен работать
+          # secrets.amsternl тоже должен работать
           GH_TOKEN: ${{ secrets.amsternl != '' && secrets.amsternl || github.token }}
           DELETE_TAGS: ${{ inputs.delete_tags }}
           image_ci: ${{ steps.meta.outputs.image }}
