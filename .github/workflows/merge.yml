@@ -12,10 +12,12 @@ on:
       upstream_ref:
         description: "Upstream tag or branch (for example v3.1.20260812)"
         required: true
+        default: "master"
         type: string
       kernel_version:
         description: "Target kernel version (for example 6.12.0-273.el10.x86_64)"
         required: true
+        default: "6.12.0-273.el10.x86_64"
         type: string
       vds_branch:
         description: "VDS branch to merge into"

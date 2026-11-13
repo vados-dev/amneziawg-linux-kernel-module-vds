@@ -1,9 +1,9 @@
 name: Create stable tag
 
 on:
-#  workflow_run:
-#    workflows: ["Merge Upstream"]
-#    types: [completed]
+  workflow_run:
+    workflows: ["Merge Upstream"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       version:
