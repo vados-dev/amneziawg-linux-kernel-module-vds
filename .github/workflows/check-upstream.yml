@@ -8,18 +8,42 @@ on:
       manual_tag:
         description: "Upstream tag to check (overrides DEFAULT_TAG and the latest tag)"
         required: false
+        default: ""
         type: string
+      run_merge:
+        description: "Start merge.yml when a new upstream tag is found"
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: "Passed to merge.yml: do not push merge results"
+        required: false
+        default: true
+        type: boolean
+      NOTIFY_ON_UPDATE:
+        description: "Do not start merge.yml automatically; only notify about the new upstream tag"
+        required: false
+        default: false
+        type: boolean
+      NOTIFY_ON_RESULT:
+        description: "Send short result notifications with links to logs and reports"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
   issues: write
+  actions: write
 
 env:
   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+  NOTIFY_ON_UPDATE: ${{ inputs.NOTIFY_ON_UPDATE || vars.NOTIFY_ON_UPDATE == 'true' }}
+  NOTIFY_ON_RESULT: ${{ inputs.NOTIFY_ON_RESULT || vars.NOTIFY_ON_RESULT == 'true' }}
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -30,31 +54,54 @@ jobs:
           DEFAULT_TAG: ${{ vars.DEFAULT_TAG }}
         run: |
           set -euo pipefail
+
+          normalize() {
+            local t="${1#refs/tags/}"
+            printf '%s' "${t#v}"
+          }
+
+          remote_tags() {
+            git ls-remote --tags --refs "https://github.com/${UPSTREAM_REPO}.git" \
+              | awk -F/ '{print $NF}'
+          }
+
+          tags="$(remote_tags)"
+
           tag="${MANUAL_TAG:-}"
           if [ -z "$tag" ]; then
             tag="${DEFAULT_TAG:-}"
           fi
           if [ -z "$tag" ]; then
-            tag="$(git ls-remote --tags --refs --sort=-v:refname \
-              "https://github.com/${UPSTREAM_REPO}.git" \
-              | awk -F/ '{print $NF}' | head -n1)"
+            tag="$(printf '%s\n' "$tags" | sort -V | tail -n1)"
           fi
+
+          # Accept both v-prefixed and bare tags; branches are left untouched.
+          if [ -n "$tag" ] && ! printf '%s\n' "$tags" | grep -qx "$tag"; then
+            if printf '%s\n' "$tags" | grep -qx "v${tag#v}"; then
+              tag="v${tag#v}"
+            fi
+          fi
+
           if [ -z "$tag" ]; then
             echo "::error::Could not resolve upstream tag"
             exit 1
           fi
+
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "tag_version=$(normalize "$tag")" >> "$GITHUB_OUTPUT"
 
       - name: Compare with internal/config/version
         id: compare
         env:
           TAG: ${{ steps.resolve.outputs.tag }}
+          TAG_VERSION: ${{ steps.resolve.outputs.tag_version }}
         run: |
           set -euo pipefail
-          base="v$(tr -d '[:space:]' < internal/config/version)"
-          echo "upstream=$TAG base=$base"
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          if [ "$TAG" = "$base" ]; then
+          base="$(tr -d '[:space:]' < internal/config/version)"
+          base_version="${base#v}"
+          echo "upstream=${TAG} (${TAG_VERSION}) base=v${base_version}"
+          echo "base=v${base_version}" >> "$GITHUB_OUTPUT"
+          if [ "$TAG_VERSION" = "$base_version" ]; then
             echo "in_sync=true" >> "$GITHUB_OUTPUT"
             echo "in sync — nothing to do"
           else
@@ -62,7 +109,8 @@ jobs:
           fi
 
       - name: Create migration issue
-        if: steps.compare.outputs.in_sync == 'false'
+        id: issue
+        if: ${{ steps.compare.outputs.in_sync == 'false' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.resolve.outputs.tag }}
@@ -71,40 +119,99 @@ jobs:
         run: |
           set -euo pipefail
           title="Upstream ${TAG} released — VDS migration needed (base: ${BASE})"
-          open="$(gh issue list --repo "$REPO" --state open --search "in:title \"${TAG}\"" --json number --jq length)"
-          if [ "$open" -gt 0 ]; then
+          existing="$(gh issue list --repo "$REPO" --state open --search "in:title \"${TAG}\"" --json number,url --jq '.[0] // empty')"
+          if [ -n "$existing" ]; then
             echo "issue for ${TAG} already open — not duplicating"
+            echo "url=$(printf '%s' "$existing" | jq -r .url)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           body="$(cat <<EOF
           Upstream [${UPSTREAM_REPO}](https://github.com/${UPSTREAM_REPO}) released **${TAG}**; VDS base is **${BASE}**.
 
           ## VDS migration checklist
-          - [ ] Run \`merge.yml\` with \`upstream_tag=${TAG}\` and the tested kernel version.
+          - [ ] Run \`merge.yml\` with \`upstream_ref=${TAG}\` and an empty \`kernel_version\` (latest kernel).
           - [ ] Verify the ISRHEL10/ISRHEL100/ISRHEL101 guards in \`src/compat/compat.h\`.
-          - [ ] Update \`internal/config/upstream\` and \`internal/config/version\`.
-          - [ ] Bump \`internal/config/current\` and \`src/version.h\` to the new \`-vds\` version.
-          - [ ] Run \`stable.yml\` after a successful merge.
+          - [ ] Review root-level upstream files reported by \`merge.yml\`.
+          - [ ] Confirm \`internal/config/{current,version,upstream}\` and \`src/version.h\` after the merge.
+          - [ ] \`stable.yml\` runs automatically from \`merge.yml\`; do not start it manually.
           - [ ] Update \`docs/CHANGELOG.md\`.
 
           Changelog: https://github.com/${UPSTREAM_REPO}/releases/tag/${TAG}
           EOF
           )"
-          gh issue create --repo "$REPO" --title "$title" --body "$body"
+          url="$(gh issue create --repo "$REPO" --title "$title" --body "$body")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Start merge workflow
+        if: ${{ steps.compare.outputs.in_sync == 'false' && inputs.run_merge && env.NOTIFY_ON_UPDATE != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run merge.yml \
+            --repo "$REPO" \
+            --ref "$DEFAULT_BRANCH" \
+            -f upstream_ref="$TAG" \
+            -f kernel_version="" \
+            -f vds_branch="$DEFAULT_BRANCH" \
+            -f dry_run="$DRY_RUN" \
+            -f NOTIFY_ON_UPDATE="$NOTIFY_ON_UPDATE" \
+            -f NOTIFY_ON_RESULT="$NOTIFY_ON_RESULT"
+
+      - name: Notify Telegram about upstream update
+        if: ${{ steps.compare.outputs.in_sync == 'false' && env.NOTIFY_ON_UPDATE == 'true' }}
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+          ISSUE_URL: ${{ steps.issue.outputs.url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then
+            echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"
+            exit 0
+          fi
+          text="Upstream ${TAG} released. merge.yml was not started (NOTIFY_ON_UPDATE=true). Issue: ${ISSUE_URL:-none}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=${text}" > /dev/null
+
+      - name: Notify Telegram on result
+        if: ${{ always() && env.NOTIFY_ON_RESULT == 'true' }}
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+          JOB_STATUS: ${{ job.status }}
+          ISSUE_URL: ${{ steps.issue.outputs.url }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then
+            echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"
+            exit 0
+          fi
+          text="check-upstream: ${JOB_STATUS}. Upstream: ${TAG:-unknown}. Issue: ${ISSUE_URL:-none}. Logs: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=${text}" > /dev/null
 
       - name: Notify Telegram on failure
-        if: failure()
+        if: ${{ failure() && env.NOTIFY_ON_RESULT != 'true' }}
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TAG: ${{ steps.resolve.outputs.tag }}
         run: |
           set -euo pipefail
-          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
-            echo "Telegram secrets are not configured — skipping notification"
+          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then
+            echo "::warning::Telegram secrets TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID are not configured — skipping notification"
             exit 0
           fi
           text="check-upstream failed for ${TAG:-unknown tag}. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
             --data-urlencode "text=${text}" > /dev/null
