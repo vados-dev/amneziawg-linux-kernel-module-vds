@@ -47,13 +47,13 @@ on:
         type: string
       width_dkms:
         description: "Install amneziawg-dkms from copr (true/false)"
-        required: false
-        default: false
+        required: true
+        default: true
         type: boolean
       width_base_packages:
-        description: "Space separated package list for dnf install (CentOS Stream names, empty = skip)"
-        required: false
-        default: "mc git make curl wget libmnl-devel pkgconf fail2ban firewalld firewalld-filesystem nftables python3 python3-pip qrencode"
+        description: "Space separated package list for dnf install (CentOS Stream names)"
+        required: true
+        default: "dnf-plugins-core git make curl wget libmnl-devel pkgconf python3 python3-pip"
         type: string
       delete_tags:
         description: "Delete mode: space/comma separated tags (e.g. v0.0.1b,sha-abc123)"
