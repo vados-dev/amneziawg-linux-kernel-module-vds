@@ -25,8 +25,7 @@ RUN if [ "$WIDTH_DKMS" = "true" ]; then \
         case "$os_ver" in ''|*[!0-9]*) os_ver=10 ;; esac; \
         arch="$(uname -m)"; \
         dnf copr enable -y tigro/amneziawg "centos-stream-${os_ver}-${arch}" ; \
-        dnf clean all ; dnf makecache ; 
-        WIDTH_BASE_PACKAGES+=" amneziawg-dkms" ; \
+        dnf clean all ; dnf makecache ; dnf -y install amneziawg-dkms" ; \
     fi
 
 # Список пакетов передаётся через пробел, поэтому word splitting нужен намеренно.
