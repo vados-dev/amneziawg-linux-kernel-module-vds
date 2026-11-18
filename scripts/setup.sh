@@ -89,7 +89,7 @@ install_dnf_repos() {
     is_enabled epel > /dev/null 2>&1 || { dnf install -y epel-release; do_enable epel; }
     is_copr "tigro/amneziawg" > /dev/null 2>&1 || { dnf copr enable -y tigro/amneziawg centos-stream-${os_ver}-$(arch); } 
     ret=$(dnf clean all && dnf makecache) > /dev/null 2>&1 || err "Ошибка 'dnf clean all && dnf makecache': ${ret}"
-    log "Насмтройка dnf репозиториев закончена."
+    log "Настройка dnf репозиториев закончена."
 }
 
 check_deps() {
