@@ -11,8 +11,8 @@ LABEL maintainer="vados-dev"
 LABEL com.docker.compose.service="amneziawg-ci-runner"
 LABEL com.docker.compose.project="amneziawg-ci"
 
-RUN set -eux; dnf -y install dnf-plugins-core ; dnf config-manager --set-enabled crb; dnf check-update -y ; \
-dnf -y install epel-release; dnf update;
+RUN set -eux; dnf -y install dnf-plugins-core; dnf config-manager --set-enabled crb; dnf -y check-update;
+RUN set -eux; dnf -y install epel-release; dnf -y update;
 
 # WIDTH_KERNEL — точная версия ядра, например 6.12.0-273.el10.x86_64.
 RUN if [ -n "$WIDTH_KERNEL" ] && [ "$WIDTH_KERNEL" != "false" ]; then \
