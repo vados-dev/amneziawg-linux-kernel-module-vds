@@ -1,40 +1,45 @@
-# AmneziaWG kernel module
+# Модуль ядра AmneziaWG (VDS)
 
-## Table of contents
+[Русский](README.md) | [English](README_en.md)
 
-- [Installation](#installation)
+Форк [amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module).
+Текущая версия VDS: `3.1.20260812-vds`.
+
+## Содержание
+
+- [Установка](#установка)
   - [Ubuntu](#ubuntu)
   - [Debian](#debian)
   - [Linux Mint](#linux-mint)
   - [RHEL/CentOS/SUSE/Fedora Core](#rhelcentossusefedora-core)
-- [Manual build](#manual-build)
-- [Configuration](#configuration)
-- [Troubleshooting](#troubleshooting)
-- [License](#license)
+- [Ручная сборка](#ручная-сборка)
+- [Настройка](#настройка)
+- [Диагностика](#диагностика)
+- [Лицензия](#лицензия)
 
-## Installation
+## Установка
 
 ### Ubuntu
 
-Open `Terminal` and proceed with following instructions:
+Откройте `Терминал` и выполните следующие шаги:
 
-1. (Optionally) Upgrade your system to latest packages including latest available kernel by running `apt-get full-upgrade`.
-After kernel upgrade reboot is required.
-2. Ensure that you have source repositories configured for APT - run `vi /etc/apt/sources.list` and make sure that there is
-at least one line starting with `deb-src` is present and uncommented.
-3. Install pre-requisites - run `sudo apt install -y software-properties-common python3-launchpadlib gnupg2 linux-headers-$(uname -r)`.
-4. Run `sudo add-apt-repository ppa:amnezia/ppa`.
-5. Finally execute `sudo apt-get install -y amneziawg`.
+1. (Необязательно) Обновите систему до последних пакетов, включая доступную версию ядра: `apt-get full-upgrade`.
+   После обновления ядра требуется перезагрузка.
+2. Убедитесь, что для APT настроены репозитории с исходными кодами: откройте `vi /etc/apt/sources.list` и проверьте,
+   что есть хотя бы одна раскомментированная строка, начинающаяся с `deb-src`.
+3. Установите зависимости: `sudo apt install -y software-properties-common python3-launchpadlib gnupg2 linux-headers-$(uname -r)`.
+4. Выполните `sudo add-apt-repository ppa:amnezia/ppa`.
+5. Установите пакет: `sudo apt-get install -y amneziawg`.
 
 ### Debian
 
-Open `Terminal` and do next steps:
+Откройте `Терминал` и выполните следующие шаги:
 
-1. (Optionally) Upgrade your system to latest packages including latest available kernel by running `apt-get full-upgrade`.
-   After kernel upgrade reboot is required.
-2. Ensure that you have source repositories configured for APT - run `vi /etc/apt/sources.list` and make sure that there is
-   at least one line starting with `deb-src` is present and uncommented.
-3. Execute following commands:
+1. (Необязательно) Обновите систему до последних пакетов, включая доступную версию ядра: `apt-get full-upgrade`.
+   После обновления ядра требуется перезагрузка.
+2. Убедитесь, что для APT настроены репозитории с исходными кодами: откройте `vi /etc/apt/sources.list` и проверьте,
+   что есть хотя бы одна раскомментированная строка, начинающаяся с `deb-src`.
+3. Выполните команды:
 ```shell
 sudo apt install -y software-properties-common python3-launchpadlib gnupg2 linux-headers-$(uname -r)
 sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 57290828
@@ -46,11 +51,12 @@ sudo apt-get install -y amneziawg
 
 ### Linux Mint
 
-Open `Software Sources` and make sure that `Source code repositories` (under `Optional Sources`) are enabled.
+Откройте `Источники приложений` и убедитесь, что включён пункт `Репозитории исходного кода`
+(в разделе `Дополнительные источники`).
 
-Proceed to `PPAs` section and add `ppa:amnezia/ppa` PPA repository, after that save configuration and rebuild `apt` cache.
+Перейдите в раздел `PPA`, добавьте репозиторий `ppa:amnezia/ppa`, сохраните настройки и обновите кэш `apt`.
 
-After that, open `Terminal` and run:
+После этого откройте `Терминал` и выполните:
 
 ```shell
 sudo apt-get install -y amneziawg
@@ -58,122 +64,122 @@ sudo apt-get install -y amneziawg
 
 ### RHEL/CentOS/SUSE/Fedora Core
 
-*If you use release that doesn't have DKMS support out of the box, you may need to install [EPEL](https://docs.fedoraproject.org/en-US/epel/#_quickstart) first.*
+*Если в вашем дистрибутиве нет поддержки DKMS «из коробки», сначала может потребоваться установить
+[EPEL](https://docs.fedoraproject.org/en-US/epel/#_quickstart).*
 
-Open `Terminal` and run:
+Откройте `Терминал` и выполните:
 
 ```shell
 sudo dnf copr enable tigro/amneziawg
 sudo dnf install amneziawg-dkms amneziawg-tools
 ```
 
-Before installation it is strictly recommended to upgrade your system kernel to the latest available version and perform
-the reboot afterwards.
+Перед установкой настоятельно рекомендуется обновить ядро системы до последней доступной версии и перезагрузиться.
 
-## Manual build
+## Ручная сборка
 
-You may need to install kernel headers and/or build essentials packages before running following steps.
+Перед выполнением шагов может потребоваться установить заголовки ядра и пакеты для сборки.
 
-1. In Terminal:
+1. В терминале:
     ```shell
     git clone https://github.com/vados-dev/amneziawg-linux-kernel-module-vds.git
-    cd amneziawg-linux-kernel-module/src
+    cd amneziawg-linux-kernel-module-vds/src
     ```
 
-2. Now, if you run modern Linux with kernel version 5.6+, you need to download your kernel's source from anywhere possible
-and link resulting tree to `kernel` symlink:
-    
+2. Если используется современное ядро Linux 5.6+, нужно скачать исходные коды ядра и связать полученное дерево
+   с символической ссылкой `kernel`:
+
     ```shell
     ln -s /path/to/kernel/source kernel
     ```
-    
-    Please note to find and provide full kernel sourcetree, not only headers. **If you run on legacy kernel (<5.6), you do not need to perform this step.**
 
-3. Now perform build and installation:
+   Нужно предоставить полное дерево исходных кодов ядра, а не только заголовки.
+   **Для старого ядра (<5.6) этот шаг не нужен.**
+
+3. Выполните сборку и установку:
     ```shell
     make
     sudo make install
     ```
-   
-    Or on a capable system you may want to use DKMS for this:
+
+   Либо, если система это позволяет, используйте DKMS:
     ```shell
     sudo make dkms-install
     ```
 
-    and
+   и
     ```shell
     sudo dkms add -m amneziawg -v $(make print-version)
     sudo dkms build -m amneziawg -v $(make print-version)
-    sudo dkms install -m amneziawg -v $(make print-version) 
+    sudo dkms install -m amneziawg -v $(make print-version)
     ```
-    or 
+   или
     ```shell
     sudo dkms install "amneziawg/$(make print-version)"
     ```
-    check:
+   проверка:
     ```shell
     sudo modprobe amneziawg
     ```
 
-## Configuration
+## Настройка
 
 > [!IMPORTANT]
-> All parameters must be the same between Client and Server, except for Jc, Jmin, and Jmax - these may vary.
+> Все параметры должны совпадать на клиенте и сервере, кроме Jc, Jmin и Jmax — они могут различаться.
 
-- Jc — 1 ≤ Jc ≤ 128; recommended range is from 4 to 12 inclusive
-- Jmin — Jmax > Jmin < 1280*; recommended value is 8
-- Jmax — Jmin < Jmax ≤ 1280*; recommended value is 80
-- S1 — S1 ≤ 1132* (1280* - 148 = 1132); S1 + 56 ≠ S2; recommended range is from 15 to 150 inclusive
-- S2 — S2 ≤ 1188* (1280* - 92 = 1188); recommended range is from 15 to 150 inclusive
-- H1/H2/H3/H4 — must be unique among each other; recommended range is from 5 to 2147483647 inclusive
+- Jc — 1 ≤ Jc ≤ 128; рекомендуемый диапазон — от 4 до 12 включительно
+- Jmin — Jmax > Jmin < 1280*; рекомендуемое значение — 8
+- Jmax — Jmin < Jmax ≤ 1280*; рекомендуемое значение — 80
+- S1 — S1 ≤ 1132* (1280* - 148 = 1132); S1 + 56 ≠ S2; рекомендуемый диапазон — от 15 до 150 включительно
+- S2 — S2 ≤ 1188* (1280* - 92 = 1188); рекомендуемый диапазон — от 15 до 150 включительно
+- H1/H2/H3/H4 — должны быть уникальны между собой; рекомендуемый диапазон — от 5 до 2147483647 включительно
 
-`* Assuming a basic internet connection with an MTU value of 1280.`
+`* В предположении, что базовое интернет-соединение имеет MTU 1280.`
 
-## Troubleshooting
+## Диагностика
 
 > [!TIP]
-> Please check [Ubuntu Server documentation](https://documentation.ubuntu.com/server/how-to/wireguard-vpn/troubleshooting) for more troubleshooting steps.
+> Дополнительные шаги диагностики см. в [документации Ubuntu Server](https://documentation.ubuntu.com/server/how-to/wireguard-vpn/troubleshooting).
 
-### Enable debug logging
+### Включение отладочного логирования
 
-To get more details, you can enable the dynamic debug feature for the module:
+Чтобы получить больше информации, включите динамическую отладку модуля:
 
 ```shell
 echo "module amneziawg +p" | sudo tee /sys/kernel/debug/dynamic_debug/control
 ```
 
-This will log messages to dmesg, which can be watched live with:
+Сообщения будут попадать в dmesg; их можно смотреть в реальном времени:
 ```shell
 dmesg -wT
 ```
 
-### Low space on `/tmp` filesystem
+### Мало места в `/tmp`
 
-Most installation instructions above assume that you have enough space in system's `/tmp` partition (as setup script needs 
-to manipulate with kernel's sourcetree which is pretty huge).
+Большинство инструкций выше предполагают, что в разделе `/tmp` достаточно места: скрипт установки работает
+с деревом исходных кодов ядра, которое занимает много места.
 
-If you can not afford enough space in your `/tmp`, you may override temporary dir by setting `AWG_TEMP_DIR` environment variable
-before the installation:
+Если места в `/tmp` недостаточно, переопределите временный каталог переменной `AWG_TEMP_DIR` перед установкой:
 
 ```shell
 export AWG_TEMP_DIR="/home/ubuntu/tmp"
 ```
 
-This setting should persist for future and will not require repeating.
+Настройка сохранится для будущих запусков и не потребует повторения.
 
-### Kernel sourcetree could not be found automatically
+### Дерево исходных кодов ядра не найдено автоматически
 
-In some rare cases, setup script may not find your kernel's sourcetree automatically. You may find appropriate sources by yourself
-then and link them to DKMS module sources, e.g.
+В редких случаях скрипт установки не может автоматически найти дерево исходных кодов ядра. Найдите исходники
+самостоятельно и свяжите их с исходниками DKMS-модуля, например:
 
 ```shell
-ln -s /path/to/your/kernel/sources /usr/src/amneziawg-1.0.0/kernel
+ln -s /path/to/your/kernel/sources /usr/src/amneziawg-3.1.20260812-vds/kernel
 ```
 
-Reinstall the package thereafter and you should get everything working.
+После этого переустановите пакет — всё должно заработать.
 
-Should you upgrade your kernel in the future, please remember that you may also need refresh sourcetree and update symlinks.
+При обновлении ядра в будущем может потребоваться обновить дерево исходных кодов и символические ссылки.
 
-## License
+## Лицензия
 
-This project is released under the [GPLv2](COPYING).
+Проект распространяется по лицензии [GPLv2](COPYING).

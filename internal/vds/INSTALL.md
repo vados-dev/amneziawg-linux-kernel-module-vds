@@ -1,20 +1,43 @@
+# Установка и обновление VDS
 
-https://github.com/Advanced-WG/amneziawg-linux-kernel-module-awg/blob/main/docs/TROUBLESHOOTING.md
+[Русский](INSTALL.md) | [English](INSTALL_en.md)
 
-# Fedora/RHEL:
+Текущая версия VDS: `3.1.20260812-vds`.
+
+## Требования
+
+- Заголовки ядра для работающего ядра.
+- DKMS.
+- Инструменты сборки: `make`, `gcc`, `git`.
+
+## Fedora/RHEL/CentOS
+
+Установите заголовки ядра и пересоберите модуль:
+
+```shell
 sudo dnf install -y kernel-devel-$(uname -r)
-Then rebuild:
-
 sudo dkms install "amneziawg/$(dkms status | grep amneziawg | awk -F'[/, ]+' '{print $2}' | head -1)" -k $(uname -r)
-To prevent this in the future, install the headers meta-package . see Installation.
+```
 
-Updating to a new version
+Чтобы не повторять это в будущем, установите метапакет с заголовками ядра.
+
+## Обновление до новой версии
+
+```shell
 cd amneziawg-linux-kernel-module-vds/src
 git pull
 
-# Remove old DKMS registration:
+# Удалить старую регистрацию DKMS:
 sudo dkms remove "amneziawg/$(dkms status | grep amneziawg | awk -F'[/, ]+' '{print $2}' | head -1)" --all
 
-# Install new version:
+# Установить новую версию:
 sudo make dkms-install
 sudo dkms install "amneziawg/$(make print-version)"
+```
+
+## Проверка
+
+```shell
+modinfo amneziawg | grep -E 'filename|version'
+sudo modprobe amneziawg
+```
