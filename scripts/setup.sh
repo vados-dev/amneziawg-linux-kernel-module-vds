@@ -35,11 +35,19 @@ LOCAL_BUILD=0
 NONINTERACTIVE=0
 
 # Common functions
-cmd()  { printf '  [\033[1;33m✨\033[0m]\033[1m %s \033[0m\n' "$*" >&2; "$@"; }
-log()  { printf ' \033[1;34m 📋 INFO:\033[0;8m [%s] - %s.\033[0m\n' "$PROGRAM" "$*"; }
-warn() { printf ' \033[1;33m ⚡ WARN:\033[0;1m [%s] - %s.\033[0m\n' "$PROGRAM" "$*" >&2; }
-err()  { printf ' \033[0;31m ⚫ ERROR:\033[0;1m [%s] - %s!\033[0m\n' "$PROGRAM" "$*" >&2; }
-die()  { printf ' \033[1;31m ❌ CRITICAL:\033[0;1m [%s] - %s!\033[0m\n' "$PROGRAM" "$*" >&2; exit 1; }
+if [ -t 0 ]; then
+  cmd()  { printf '  [\033[1;33m✨\033[0m]\033[1m %s \033[0m\n' "$*" >&2; "$@"; }
+  log()  { printf ' \033[1;34m 📋 INFO:\033[0;8m [%s] - %s.\033[0m\n' "$PROGRAM" "$*"; }
+  warn() { printf ' \033[1;33m ⚡ WARN:\033[0;1m [%s] - %s.\033[0m\n' "$PROGRAM" "$*" >&2; }
+  err()  { printf ' \033[0;31m ⚫ ERROR:\033[0;1m [%s] - %s!\033[0m\n' "$PROGRAM" "$*" >&2; }
+  die()  { printf ' \033[1;31m ❌ CRITICAL:\033[0;1m [%s] - %s!\033[0m\n' "$PROGRAM" "$*" >&2; exit 1; }
+else
+  cmd()  { printf '  [*] %s\n' "$*" >&2; "$@"; }
+  log()  { printf ' [INFO] [%s] - %s.\n' "$PROGRAM" "$*"; }
+  warn() { printf ' [WARN] [%s] - %s.\n' "$PROGRAM" "$*" >&2; }
+  err()  { printf ' [ERROR] [%s] - %s!\n' "$PROGRAM" "$*" >&2; }
+  die()  { printf ' [CRITICAL] [%s] - %s!\n' "$PROGRAM" "$*" >&2; exit 1; }
+fi
 
 check_root() { [ "$(id -u)" -eq 0 ] || die "Запускайте от root."; }
 check_os() {
@@ -232,7 +240,6 @@ update_kernel() {
     [ -d "/lib/modules/${ver}/build" ] > /dev/null 2>&1 || { err "Заголовки для ядра $ver не найдены после установки."; return 1; }
     KERNEL_VERSION="$ver"; log "Целевое ядро для сборки: $KERNEL_VERSION."
 }
-
 
 load_module() {
     local out
