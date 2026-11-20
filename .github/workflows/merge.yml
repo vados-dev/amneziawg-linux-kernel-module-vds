@@ -87,8 +87,7 @@ on:
 permissions:
   contents: write
   issues: write
-  # Нужен для чтения приватного пакета GHCR, если образ centos-10 не публичный.
-  packages: read
+  packages: write
 
 env:
   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
