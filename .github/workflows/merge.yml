@@ -78,7 +78,7 @@ on:
       ci_image_source:
         description: "registry = pinned GHCR image; build = build tmp-* image in this run (no push)"
         required: false
-        default: registry
+        default: build
         type: choice
         options:
           - registry
