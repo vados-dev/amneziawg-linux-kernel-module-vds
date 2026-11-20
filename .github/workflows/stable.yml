@@ -26,7 +26,7 @@ on:
       notify_mode:
         description: "none|inherit|changes|always; none and inherit defer to repository variable NOTIFY_MODE"
         required: false
-        default: "none"
+        default: ""
         type: string
   workflow_dispatch:
     inputs:
@@ -53,7 +53,7 @@ on:
       notify_mode:
         description: "none|inherit|changes|always; none and inherit defer to repository variable NOTIFY_MODE"
         required: false
-        default: "none"
+        default: inherit
         type: string
 
 permissions:
@@ -61,8 +61,7 @@ permissions:
 
 env:
   TELEGRAM_ENABLED: ${{ vars.TELEGRAM_NOTIFY != 'false' }}
-  NOTIFY_MODE_INPUT: ${{ inputs.notify_mode }}
-  NOTIFY_MODE_VAR: ${{ vars.NOTIFY_MODE }}
+  NOTIFY_MODE: ${{ inputs.notify_mode || 'inherit' }}
 
 jobs:
   release:
@@ -77,10 +76,14 @@ jobs:
         id: notify
         run: |
           set -euo pipefail
-          raw="${NOTIFY_MODE_INPUT:-none}"
+          # none = отправку выключить полностью; inherit = взять NOTIFY_MODE из
+          # репозитарной переменной (fallback: changes); changes/always — как есть.
+          raw="${NOTIFY_MODE_INPUT:-inherit}"
           case "$raw" in
+            none) mode=none ;;
             changes|always) mode="$raw" ;;
-            *) mode="${NOTIFY_MODE_VAR:-changes}" ;;
+            inherit) mode="${NOTIFY_MODE_VAR:-changes}" ;;
+            *) echo "::warning::Unknown NOTIFY_MODE '${raw}' - falling back to inherit"; mode="${NOTIFY_MODE_VAR:-changes}" ;;
           esac
           case "$mode" in
             none|changes|always) ;;
