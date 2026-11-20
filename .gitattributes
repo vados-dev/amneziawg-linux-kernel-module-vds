@@ -6,6 +6,7 @@
 #* text=auto
 
 # Explicit for the paths that used to churn the most.
+Dockerfile.* text eol=lf
 *.sh text eol=lf
 *.go text eol=lf
 *.json text eol=lf
