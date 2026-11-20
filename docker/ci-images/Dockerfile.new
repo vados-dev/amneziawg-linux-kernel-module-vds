@@ -1,0 +1,56 @@
+ARG CI_BASE_IMAGE=quay.io/centos/centos:stream10
+FROM ${CI_BASE_IMAGE}
+
+# Значения по умолчанию применяются, если build-arg не передан. Пустая строка или "false" означают «не устанавливать».
+ARG WIDTH_KERNEL=""
+ARG WIDTH_DKMS=true
+ARG WIDTH_BASE_PACKAGES="gcc make git tar gzip which curl wget libmnl-devel pkgconf python3 python3-pip"
+
+LABEL maintainer="vados-dev"
+LABEL com.docker.compose.service="amneziawg-ci-runner"
+LABEL com.docker.compose.project="amneziawg-ci"
+
+RUN set -eux; dnf -y install dnf-plugins-core; dnf config-manager --set-enabled crb; dnf config-manager --set-enabled appstream;
+RUN set -eux; dnf -y install epel-release kernel-srpm-macros dracut;
+
+# Устанавливаем ядро Stream 10 (по умолчанию 6.12) и инструменты для initramfs
+# WIDTH_KERNEL — точная версия ядра, например 6.12.0-273.el10.x86_64.
+RUN if [ -n "$WIDTH_KERNEL" ] && [ "$WIDTH_KERNEL" != "false" ]; then \
+        set -eux; \
+        dnf -y install "kernel-${WIDTH_KERNEL}" "kernel-core-${WIDTH_KERNEL}" "kernel-devel-${WIDTH_KERNEL}" "kernel-devel-matched-${WIDTH_KERNEL}" \
+        "kernel-headers-${WIDTH_KERNEL}" "kernel-modules-${WIDTH_KERNEL}" "kernel-modules-core-${WIDTH_KERNEL}" "kernel-modules-extra-${WIDTH_KERNEL}" \
+        "kernel-modules-extra-matched-${WIDTH_KERNEL}" "kernel-tools-${WIDTH_KERNEL}" "kernel-tools-libs-${WIDTH_KERNEL}" \
+        "kernel-tools-libs-devel-${WIDTH_KERNEL}"; \
+    else \
+        set -eux; \
+        dnf -y install kernel kernel-core kernel-devel kernel-devel-matched kernel-headers kernel-modules kernel-modules-core \
+        kernel-modules-extra kernel-modules-extra-matched kernel-tools kernel-tools-libs kernel-tools-libs-devel; \
+    fi
+
+# Генерируем initramfs под установленное ядро
+RUN set -eux; dracut -f --kver "$(ls /usr/lib/modules | head -1)" /boot/initramfs-custom.img
+
+RUN if [ "$WIDTH_DKMS" = "true" ]; then \
+        set -eux; \
+        os_ver="$(rpm -E '%{rhel}' 2>/dev/null || true)"; \
+        case "$os_ver" in ''|*[!0-9]*) os_ver=10 ;; esac; \
+        arch="$(uname -m)"; \
+        dnf copr enable -y tigro/amneziawg "centos-stream-${os_ver}-${arch}" ; \
+        dnf clean all ; dnf makecache ; dnf -y install amneziawg-tools amneziawg-dkms; \
+    fi
+
+# Список пакетов передаётся через пробел, поэтому word splitting нужен намеренно.
+RUN if [ -n "$WIDTH_BASE_PACKAGES" ] && [ "$WIDTH_BASE_PACKAGES" != "false" ]; then \
+        set -eux; \
+        dnf -y install $WIDTH_BASE_PACKAGES; \
+    fi
+
+RUN set -eux; dnf clean all;
+
+#ADD docker/tools/mc.tar.gz /root/.config
+
+WORKDIR /work
+
+ENV HOME=/work/.ci-home
+ENV USER=git
+ENV LOGNAME=git
