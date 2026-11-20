@@ -17,7 +17,7 @@ RUN set -eux; dnf -y install epel-release; dnf -y update;
 # WIDTH_KERNEL — точная версия ядра, например 6.12.0-273.el10.x86_64.
 RUN if [ -n "$WIDTH_KERNEL" ] && [ "$WIDTH_KERNEL" != "false" ]; then \
         set -eux; \
-        dnf -y install "kernel-headers-${WIDTH_KERNEL}" "kernel-devel-${WIDTH_KERNEL}" ; \
+        dnf -y install "kernel-headers-${WIDTH_KERNEL}" "kernel-devel-${WIDTH_KERNEL}"; \
     fi
 RUN if [ "$WIDTH_DKMS" = "true" ]; then \
         set -eux; \
@@ -25,13 +25,13 @@ RUN if [ "$WIDTH_DKMS" = "true" ]; then \
         case "$os_ver" in ''|*[!0-9]*) os_ver=10 ;; esac; \
         arch="$(uname -m)"; \
         dnf copr enable -y tigro/amneziawg "centos-stream-${os_ver}-${arch}" ; \
-        dnf clean all ; dnf makecache ; dnf -y install amneziawg-dkms" ; \
+        dnf clean all ; dnf makecache ; dnf -y install amneziawg-tools amneziawg-dkms"; \
     fi
 
 # Список пакетов передаётся через пробел, поэтому word splitting нужен намеренно.
 RUN if [ -n "$WIDTH_BASE_PACKAGES" ] && [ "$WIDTH_BASE_PACKAGES" != "false" ]; then \
         set -eux; \
-        dnf -y install $WIDTH_BASE_PACKAGES ; \
+        dnf -y install $WIDTH_BASE_PACKAGES; \
     fi
 
 ADD internal/ci-image/mc.tar.gz /root/.config
