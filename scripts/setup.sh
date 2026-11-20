@@ -84,7 +84,7 @@ check_os() {
     fi
 }
 
-check_dnf_updates() { ! dnf check-update -y > /dev/null 2>&1 && err "dnf обновления не проверены!" || log "dnf обновления проверены."; }
+check_dnf_updates() { ! dnf -y check-update > /dev/null 2>&1 && err "dnf обновления не проверены!" || log "dnf обновления проверены."; }
 install_dnf_repos() {
     log "Проверка dnf обновлений..."
     check_dnf_updates > /dev/null 2>&1 || warn "check_dnf_updates не завершилась корректно: $?"
@@ -153,19 +153,6 @@ del_awg_from_modules() {
     log "$amf удалён."
 }
 
-add_wg_to_modules() {
-    mkdir -p "$(dirname "$wmf")" || return 1
-    if ! grep -qxF 'wireguard' "$wmf" 2>/dev/null; then
-        echo "wireguard" > "$wmf" || { warn "Write error $wmf"; return 1; }
-        log "Добавлено в $wmf."
-    fi
-}
-
-del_wg_from_modules() {
-    rm -f "$wmf" || { warn "Remove error $wmf"; return 1; }
-    log "$wmf удалён."
-}
-
 start_setup() {
     local mod_ver src_dir
     if [[ "$os_type" == "rhel" ]]; then
@@ -183,11 +170,10 @@ start_setup() {
             git clone --branch "$MOD_BRANCH" "https://github.com/${mod_repo_owner}/${mod_repo}.git" "$setup_tmp" || return 1
             src_dir="${setup_tmp}/src"
         fi
-        
+
         cd ${src_dir}
         ! make print-version > /dev/null 2>&1 && mod_ver="$(cat version.h | grep "define WIREGUARD_VERSION" | awk -F'[/" ]+' '{print $3}')" \
         || mod_ver="$(make print-version)"
-    
         sudo make dkms-install && \
         sudo dkms install -m amneziawg -v ${mod_ver}
         add_awg_to_modules
@@ -199,9 +185,7 @@ start_setup() {
 
 start_remove() {
     local ver
-
     confirm "Удалить регистрацию DKMS amneziawg?" || return 1
-
     ver="$(dkms status -m amneziawg 2>/dev/null | awk -F'[/, ]+' '{print $2}' | head -n1)"
     if [ -n "$ver" ]; then
         dkms remove "amneziawg/${ver}" --all || return 1
@@ -219,6 +203,7 @@ latest_installed_kernel() {
         | awk '/^kernel-/{print $1; exit}' \
         | sed 's/^kernel-//'
 }
+
 update_kernel() {
     local ver="${KERNEL_VERSION:-}" pkg_ver arch="$(uname -m)"
     if [ -z "$ver" ]; then
@@ -317,6 +302,7 @@ check_os
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -d|deps)          set_action deps      || exit 1 ;;
+        -ud|upddeps)      set_action upddeps   || exit 1 ;;
         -rd|rmdeps)       set_action rmdeps    || exit 1 ;;
         -s|setup)         set_action setup     || exit 1 ;;
         -aa|addawg)       set_action addawg    || exit 1 ;;
@@ -325,7 +311,7 @@ while [ "$#" -gt 0 ]; do
         -da|delawg)       set_action delawg    || exit 1 ;;
         -dw|delwg)        set_action delwg     || exit 1 ;;
         -r|reinstall)     set_action reinstall || exit 1 ;;
-        -u|uninstall)     set_action uninstall || exit 1 ;;
+        -rm|remove)       set_action remove    || exit 1 ;;
         -k|--kernel)
             shift
             [ "$#" -gt 0 ] || { err "Не указана версия ядра."; show_help; exit 1; }
@@ -351,6 +337,7 @@ esac
 
 case "$ACTION" in
     deps)      install_deps "$BASE_PKGS";  exit $? ;;
+    upddeps)   update_deps  "$BASE_PKGS";  exit $? ;;
     rmdeps)    remove_deps;       exit $? ;;
     setup)     start_setup;       exit $? ;;
     addawg)    add_awg_to_modules; exit $? ;;
@@ -359,7 +346,7 @@ case "$ACTION" in
     delawg)    del_awg_from_modules; exit $? ;;
     delwg)     del_wg_from_modules;  exit $? ;;
     reinstall) start_remove || exit $?; start_setup; exit $? ;;
-    uninstall) start_remove;      exit $? ;;
+    remove)    start_remove;      exit $? ;;
     *)         err "Неизвестное действие: $ACTION"; show_help; exit 1 ;;
 esac
 
