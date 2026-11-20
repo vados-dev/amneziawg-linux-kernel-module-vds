@@ -8,8 +8,6 @@
 #include <linux/random.h>
 #include <linux/ktime.h>
 
-#define JP_MAX_PACKET_SIZE 65535
-
 static int parse_b_tag(char* val, struct list_head* head) {
     int err;
     int i;
@@ -111,7 +109,7 @@ static int parse_r_tag(char* val, struct list_head* head) {
     struct jp_tag* tag;
     int len;
 
-    if (!val || 0 > kstrtoint(val, 10, &len) || len < 0)
+    if (!val || 0 > kstrtoint(val, 10, &len))
         return -EINVAL;
 
     tag = kzalloc(sizeof(*tag), GFP_KERNEL);
@@ -142,7 +140,7 @@ static int parse_rc_tag(char* val, struct list_head* head) {
     struct jp_tag* tag;
     int len;
 
-    if (!val || 0 > kstrtoint(val, 10, &len) || len < 0)
+    if (!val || 0 > kstrtoint(val, 10, &len))
         return -EINVAL;
 
     tag = kzalloc(sizeof(*tag), GFP_KERNEL);
@@ -169,7 +167,7 @@ static int parse_rd_tag(char* val, struct list_head* head) {
     struct jp_tag* tag;
     int len;
 
-    if (!val || 0 > kstrtoint(val, 10, &len) || len < 0)
+    if (!val || 0 > kstrtoint(val, 10, &len))
         return -EINVAL;
 
     tag = kzalloc(sizeof(*tag), GFP_KERNEL);
@@ -289,11 +287,6 @@ int jp_spec_setup(struct jp_spec *spec, const char* str) {
     mods_size = 0;
 
     list_for_each_entry(tag, &head, head) {
-        if (tag->pkt_size < 0 ||
-            tag->pkt_size > JP_MAX_PACKET_SIZE - pkt_size) {
-            err = -EINVAL;
-            goto error;
-        }
         pkt_size += tag->pkt_size;
 
         if (tag->func)
