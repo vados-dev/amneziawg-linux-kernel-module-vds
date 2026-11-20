@@ -206,6 +206,34 @@ start_remove() {
     del_wg_from_modules || return 1
 }
 
+latest_installed_kernel() {
+    rpm -q --last kernel 2>/dev/null \
+        | awk '/^kernel-/{print $1; exit}' \
+        | sed 's/^kernel-//'
+}
+update_kernel() {
+    local ver="${KERNEL_VERSION:-}" pkg_ver arch="$(uname -m)"
+    [ -z "$ver" ] > /dev/null 2>&1 || { err "Обновление ядра отменено."; return 1; }
+        log "Версия ядра не указана: обновление до последней доступной."
+        dnf -y update > /dev/null 2>&1 || { err "Не удалось обновить систему!"; return 1; }
+        ver="$(latest_installed_kernel)"
+        [ -n "$ver" ] > /dev/null 2>&1 || { err "Не удалось определить установленную версию ядра."; return 1; }
+        log "Установлено ядро: $ver"
+    elif [ -d "/lib/modules/${ver}/build" ]; then
+        log "Заголовки для ядра $ver уже установлены."
+    else
+        pkg_ver="$ver"
+        case "$pkg_ver" in
+            *."$arch") pkg_ver="${pkg_ver%.*}" ;;
+        esac
+        log "Установка ядра $pkg_ver и заголовков."
+        dnf install -y "kernel-${pkg_ver}" "kernel-devel-${pkg_ver}" kernel-headers || { err "Не удалось установить ядро $pkg_ver."; return 1; }
+    fi
+    [ -d "/lib/modules/${ver}/build" ] > /dev/null 2>&1 || { err "Заголовки для ядра $ver не найдены после установки."; return 1; }
+    KERNEL_VERSION="$ver"; log "Целевое ядро для сборки: $KERNEL_VERSION."
+}
+
+
 load_module() {
     local out
     if ! out="$(modprobe amneziawg 2>&1)"; then
@@ -256,8 +284,7 @@ Almalinux 9+ / Rocky 9+ / Centos 9+ Stream / Ubuntu 24.04+ / Debian 12+.
   -dw, delwg            Удалить wireguard из автозагрузки
   -r, reinstall         Переустановить модуль
   -u, uninstall         Удалить DKMS-регистрацию
-#-> Это нужно делать в образе, из merge.yml, с его перезагрузкой
-#  -k, --kernel VER      Собрать и установить модуль для указанной версии ядра
+  -k, --kernel VER      Собрать и установить модуль для указанной версии ядра
                         пустое значение означает обновление до последнего ядра
   -b, --branch BRANCH   Ветка VDS для клонирования (по умолчанию master)
   -l, --local           Собирать текущее дерево, не клонировать репозиторий
@@ -292,11 +319,11 @@ while [ "$#" -gt 0 ]; do
         -dw|delwg)        set_action delwg     || exit 1 ;;
         -r|reinstall)     set_action reinstall || exit 1 ;;
         -u|uninstall)     set_action uninstall || exit 1 ;;
-#        -k|--kernel)
-#            shift
-#            [ "$#" -gt 0 ] || { err "Не указана версия ядра."; show_help; exit 1; }
-#            KERNEL_VERSION="$1"
-#            ;;
+        -k|--kernel)
+            shift
+            [ "$#" -gt 0 ] || { err "Не указана версия ядра."; show_help; exit 1; }
+            KERNEL_VERSION="$1"
+            ;;
         -b|--branch)
             shift
             [ "$#" -gt 0 ] || { err "Не указана ветка."; show_help; exit 1; }
@@ -377,55 +404,3 @@ esac
 #if [[ "$NO_ARGS" -eq 1 ]]; then echo -e " ${bred}Пустые аргументы [${byellow}ОПЦИИ${bred}]! ${bnc}\n${nc}"; COMMAND="help"; fi
 #if [[ "$COMMAND" == "help" ]]; then show_help "$HELP_EXIT_RC"; exit $HELP_EXIT_RC; fi
 #if [[ -z "$COMMAND" ]]; then show_help; else $COMMAND $ARGS; fi
-
-#latest_installed_kernel() {
-#    rpm -q --last kernel 2>/dev/null \
-#        | awk '/^kernel-/{print $1; exit}' \
-#        | sed 's/^kernel-//'
-#}
-#update_kernel() {
-#    local ver="${KERNEL_VERSION:-}"
-#    local pkg_ver
-#    local arch
-#
-#    arch="$(uname -m)"
-#
-#    if [ -z "$ver" ]; then
-#        log "Версия ядра не указана: обновление до последней доступной."
-#        confirm "Обновить ядро и заголовки до последней версии?" || {
-#            err "Обновление ядра отменено."
-#            return 1
-#        }
-#        dnf install -y kernel kernel-devel kernel-headers || {
-#            err "Не удалось установить последнее ядро."
-#            return 1
-#        }
-#        ver="$(latest_installed_kernel)"
-#        if [ -z "$ver" ]; then
-#            err "Не удалось определить установленную версию ядра."
-#            return 1
-#        fi
-#        log "Установлено ядро: $ver"
-#    elif [ -d "/lib/modules/${ver}/build" ]; then
-#        log "Заголовки для ядра $ver уже установлены."
-#    else
-#        pkg_ver="$ver"
-#        case "$pkg_ver" in
-#            *."$arch") pkg_ver="${pkg_ver%.*}" ;;
-#        esac
-#
-#        log "Установка ядра $pkg_ver и заголовков."
-#        dnf install -y "kernel-${pkg_ver}" "kernel-devel-${pkg_ver}" kernel-headers || {
-#            err "Не удалось установить ядро $pkg_ver."
-#            return 1
-#        }
-#    fi
-#
-#    if [ ! -d "/lib/modules/${ver}/build" ]; then
-#        err "Заголовки для ядра $ver не найдены после установки."
-#        return 1
-#    fi
-#
-#    KERNEL_VERSION="$ver"
-#    log "Целевое ядро для сборки: $KERNEL_VERSION."
-#}
