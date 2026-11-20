@@ -80,7 +80,8 @@ jobs:
     container:
       # Готовый CI-образ из build-ci-image.yml: CRB и EPEL уже включены,
       # базовые инструменты (git, make, curl, tar, gzip) предустановлены.
-      image: ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts
+      #image: ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts
+      image: ghcr.io/vados-dev/build-images/amneziawg-kernel-centos10:lts
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
