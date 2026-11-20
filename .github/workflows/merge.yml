@@ -36,7 +36,7 @@ on:
         default: "master"
         type: string
       kernel_version:
-        description: "Target kernel version; empty means the latest available"
+        description: "Target kernel version (empty = latest, or e.q. 6.12.0-281.el10.x86_64)"
         required: false
         default: ""
         type: string
@@ -148,6 +148,23 @@ jobs:
             echo "dry_run=$dry_run"
           } >> "$GITHUB_OUTPUT"
           echo "upstream_ref=$upstream_ref kernel_version=${kernel_version:-latest} vds_branch=$vds_branch dry_run=$dry_run"
+
+      - name: Build CI Image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run build-ci-image.yml \
+            --repo "$REPO" \
+            --ref "$DEFAULT_BRANCH" \
+            -f upstream_ref="$TAG" \
+            -f width_kernel="$KERNEL_VERSION" \
+            -f vds_branch="$DEFAULT_BRANCH" \
+            -f notify_mode="$NOTIFY_MODE" \
+            -F dry_run="$DRY_RUN"
 
       - name: Verify CI image tooling
         run: |
