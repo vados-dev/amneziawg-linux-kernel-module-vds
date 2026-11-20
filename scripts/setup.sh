@@ -213,7 +213,7 @@ latest_installed_kernel() {
 }
 update_kernel() {
     local ver="${KERNEL_VERSION:-}" pkg_ver arch="$(uname -m)"
-    [ -z "$ver" ] > /dev/null 2>&1 || { err "Обновление ядра отменено."; return 1; }
+    if [ -z "$ver" ]; then
         log "Версия ядра не указана: обновление до последней доступной."
         dnf -y update > /dev/null 2>&1 || { err "Не удалось обновить систему!"; return 1; }
         ver="$(latest_installed_kernel)"
