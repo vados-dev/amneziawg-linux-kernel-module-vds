@@ -1,0 +1,58 @@
+diff --git a/src/compat/compat.h b/src/compat/compat.h
+--- a/src/compat/compat.h
++++ b/src/compat/compat.h
+@@ -600,14 +600,14 @@
+ static inline int timer_delete(struct timer_list *timer)
+ {
+    return del_timer(timer);
+ }
+ #endif
+
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0) && !defined(AWG_HAVE_TIMER_CONTAINER_OF)
+ #define timer_container_of from_timer
+ #endif
+
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0) && !defined(AWG_HAVE_SOCKADDR_INET)
+ #include <linux/in6.h>
+ struct sockaddr_inet {
+    unsigned short	sa_family;
+    char		sa_data[sizeof(struct sockaddr_in6) -
+		sizeof(unsigned short)];
+ };
+ #endif
+
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0) && !defined(AWG_HAVE_NETIF_THREADED_ENABLE)
+ #include <linux/netdevice.h>
+ static inline void netif_threaded_enable(struct net_device *dev) { }
+ #endif
+@@ -650,9 +650,9 @@
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+ #define COMPAT_CANNOT_USE_PCPU_STAT_TYPE
+ #endif
+
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0) && !defined(AWG_HAVE_RTNL_NEWLINK_LINK_NET)
+ #define COMPAT_CANNOT_USE_RTNL_NEWLINK_PARAMS
+ struct rtnl_newlink_params {
+    struct net *src_net;
+@@ -700,7 +700,7 @@
+    return ipv6_stub->ipv6_dst_lookup_flow(net, sk, fl6, final_dst);
+ }
+ #endif
+
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0) && !defined(AWG_HAVE_CHACHA_STATE)
+ #include <crypto/chacha.h>
+ #define CHACHA_KEY_WORDS	8
+@@ -725,7 +725,7 @@
+ #endif
+
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0) && !defined(AWG_HAVE_WQ_PERCPU)
+ #define WQ_PERCPU 0
+ #endif
+
+ #endif /* _WG_COMPAT_H */

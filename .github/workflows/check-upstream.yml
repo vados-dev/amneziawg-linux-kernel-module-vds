@@ -93,6 +93,11 @@ jobs:
 
           tags="$(remote_tags)"
 
+          if [ -z "$tag" ] || ! printf '%s\n' "$tags" | grep -qx "$tag"; then
+            echo "::error::tag '${tag:-<empty>}' not found in ${UPSTREAM_REPO}"
+            exit 1
+          fi
+
           tag="${MANUAL_TAG:-}"
           if [ -z "$tag" ]; then
             tag="${DEFAULT_TAG:-}"

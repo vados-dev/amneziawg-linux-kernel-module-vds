@@ -8,6 +8,11 @@ on:
         required: false
         default: "master"
         type: string
+      dockerfile:
+        description: "Dockerfile in location docker/ci-images/"
+        required: true
+        default: "Dockerfile.new"
+        type: string
       kernel_version:
         description: "Target kernel version; empty means the latest available"
         required: false
@@ -28,12 +33,22 @@ on:
         required: false
         default: "none"
         type: string
+      ci_image_source:
+        description: "registry = pinned GHCR image; build = build tmp-* image in this run (no push)"
+        required: false
+        default: "build"
+        type: string
   workflow_dispatch:
     inputs:
       upstream_ref:
         description: "Upstream tag or branch"
         required: false
         default: "master"
+        type: string
+      dockerfile:
+        description: "Dockerfile in location docker/ci-images/"
+        required: true
+        default: "Dockerfile.new"
         type: string
       kernel_version:
         description: "Target kernel version (empty = latest, or e.q. 6.12.0-281.el10.x86_64)"
@@ -60,6 +75,14 @@ on:
           - inherit
           - changes
           - always
+      ci_image_source:
+        description: "registry = pinned GHCR image; build = build tmp-* image in this run (no push)"
+        required: false
+        default: registry
+        type: choice
+        options:
+          - registry
+          - build
 
 permissions:
   contents: write
@@ -73,22 +96,36 @@ env:
   TELEGRAM_ENABLED: ${{ vars.TELEGRAM_NOTIFY != 'false' }}
   NOTIFY_MODE_INPUT: ${{ inputs.notify_mode }}
   NOTIFY_MODE_VAR: ${{ vars.NOTIFY_MODE }}
+  # Пиновый образ из GHCR. Если пакет принадлежит другому репозиторию и закрыт,
+  # GITHUB_TOKEN его не прочтёт — понадобится PAT в секретах.
+  CI_IMAGE_REGISTRY_REF: ghcr.io/vados-dev/build-images/amneziawg-kernel-centos10:lts
 
 jobs:
+  build_ci_image:
+    if: ${{ inputs.ci_image_source == 'build' }}
+    uses: ./.github/workflows/build-ci-image.yml
+    with:
+      operation: build
+      dockerfile: ${{ inputs.dockerfile }}
+      base_image: quay.io/centos/centos:stream10
+      build_platforms: linux/amd64
+      # tmp-* гарантирует отсутствие пуша; run_id в имени делает concurrency-группу
+      # уникальной, чтобы параллельные вызовы не вставали в очередь друг за другом.
+      image_name: tmp-${{ github.run_id }}
+      width_kernel: ${{ inputs.kernel_version }}
+      width_dkms: false
+      width_base_packages: "gcc make git tar gzip which curl wget libmnl-devel pkgconf python3 python3-pip dkms"
+      push: false
+    secrets: inherit
+
   merge:
+    needs: [build_ci_image]
+    # build_ci_image пропускается в режиме registry — это не ошибка.
+    if: ${{ !cancelled() && (needs.build_ci_image.result == 'success' || needs.build_ci_image.result == 'skipped') }}
     runs-on: ubuntu-24.04
-    container:
-      # Готовый CI-образ из build-ci-image.yml: CRB и EPEL уже включены,
-      # базовые инструменты (git, make, curl, tar, gzip) предустановлены.
-      #image: ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos-10:lts
-      image: ghcr.io/vados-dev/build-images/amneziawg-kernel-centos10:lts
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-      options: --privileged
-    defaults:
-      run:
-        shell: bash
+    timeout-minutes: 120
+    env:
+      CI_IMAGE_SOURCE: ${{ inputs.ci_image_source }}
     outputs:
       upstream_ref: ${{ steps.resolve.outputs.upstream_ref }}
       kernel_version: ${{ steps.build.outputs.kernel_version }}
@@ -149,37 +186,50 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "upstream_ref=$upstream_ref kernel_version=${kernel_version:-latest} vds_branch=$vds_branch dry_run=$dry_run"
 
-      - name: Build CI Image
+      - name: Download local CI image
+        if: ${{ inputs.ci_image_source == 'build' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-image-tmp
+          path: /tmp
+
+      - name: Acquire CI image
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.resolve.outputs.tag }}
-          REPO: ${{ github.repository }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh workflow run build-ci-image.yml \
-            --repo "$REPO" \
-            --ref "$DEFAULT_BRANCH" \
-            -f upstream_ref="$TAG" \
-            -f width_kernel="$KERNEL_VERSION" \
-            -f vds_branch="$DEFAULT_BRANCH" \
-            -f notify_mode="$NOTIFY_MODE" \
-            -F dry_run="$DRY_RUN"
+          if [ "${CI_IMAGE_SOURCE}" = "build" ]; then
+            img="$(docker load --input /tmp/ci-image.tar | sed -n 's/^Loaded image: //p' | head -n1)"
+            [ -n "${img}" ] || { echo "::error::docker load returned no image"; exit 1; }
+          else
+            printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+            img="${CI_IMAGE_REGISTRY_REF}"
+          fi
+          docker tag "${img}" ci-image:work
+          docker rmi "${img}" >/dev/null 2>&1 || true
+
+      - name: Start merge container
+        run: |
+          set -euo pipefail
+          docker run -d --name merge --privileged \
+            -v "$GITHUB_WORKSPACE":/work \
+            ci-image:work sleep infinity
 
       - name: Verify CI image tooling
         run: |
           set -euo pipefail
-          # Образ centos-10:lts собирается через build-ci-image.yml и обязан содержать
-          # эти инструменты; установка базовых пакетов в рантайме больше не нужна.
-          missing=""
-          for tool in git make curl tar gzip base64 awk sed; do
-            command -v "$tool" >/dev/null 2>&1 || missing="${missing} ${tool}"
-          done
-          if [ -n "$missing" ]; then
-            echo "::error::CI image is missing tools:${missing}"
-            exit 1
-          fi
-          echo "CI image tooling verified: git make curl tar gzip base64 awk sed"
+          docker exec merge bash -c '
+            set -euo pipefail
+            missing=""
+            for tool in git make curl tar gzip base64 awk sed nm modinfo find; do
+              command -v "$tool" >/dev/null 2>&1 || missing="${missing} ${tool}"
+            done
+            if [ -n "$missing" ]; then
+              echo "::error::CI image is missing tools:${missing}"
+              exit 1
+            fi
+            echo "CI image tooling verified: git make curl tar gzip base64 awk sed"
+          '
 
       - name: Checkout VDS
         env:
@@ -187,27 +237,37 @@ jobs:
           VDS_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          rm -rf /tmp/vds
-          auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" clone \
-            --branch "$VDS_BRANCH" "https://github.com/${VDS_REPO}.git" /tmp/vds
-          git -C /tmp/vds remote set-url origin "https://github.com/${VDS_REPO}.git"
+          docker exec -e GITHUB_TOKEN -e VDS_REPO -e VDS_BRANCH merge bash -c '
+            set -euo pipefail
+            rm -rf /tmp/vds
+            auth="$(printf "x-access-token:%s" "$GITHUB_TOKEN" | base64 -w0)"
+            git -c http.extraheader="AUTHORIZATION: basic ${auth}" clone \
+              --branch "$VDS_BRANCH" "https://github.com/${VDS_REPO}.git" /tmp/vds
+            git -C /tmp/vds remote set-url origin "https://github.com/${VDS_REPO}.git"
+          '
 
       - name: Install dependencies
-        run: bash /tmp/vds/scripts/setup.sh -d -y
+        run: |
+          set -euo pipefail
+          docker exec merge bash -c 'bash /tmp/vds/scripts/setup.sh -d -y'
 
       - name: Fetch upstream
         run: |
           set -euo pipefail
-          rm -rf /tmp/upstream
-          # Full clone is required to diff root files against the previous upstream tag.
-          git clone --branch "$UPSTREAM_REF" \
-            "https://github.com/${UPSTREAM_REPO}.git" /tmp/upstream
-          [ -d /tmp/upstream/src ] || { echo "::error::upstream src not found"; exit 1; }
+          docker exec -e UPSTREAM_REF -e UPSTREAM_REPO merge bash -c '
+            set -euo pipefail
+            rm -rf /tmp/upstream
+            # Full clone is required to diff root files against the previous upstream tag.
+            git clone --branch "$UPSTREAM_REF" \
+              "https://github.com/${UPSTREAM_REPO}.git" /tmp/upstream
+            [ -d /tmp/upstream/src ] || { echo "::error::upstream src not found"; exit 1; }
+          '
 
       - name: Prepare merged tree
         id: prepare
         run: |
+          set -euo pipefail
+          cat > "$GITHUB_WORKSPACE/ci-prepare.sh" <<'SCRIPT'
           set -euo pipefail
           rm -rf /tmp/vds-merge
           mkdir -p /tmp/vds-merge
@@ -223,6 +283,13 @@ jobs:
           [ -d /tmp/vds-merge/internal/vds/src ] || { echo "::error::internal/vds/src not found"; exit 1; }
           cp -a /tmp/vds-merge/internal/vds/src/. /tmp/vds-merge/src/
 
+          # Оверлей правок compat (зонды): применяется поверх свежего апстрима.
+          # Патч не лёг → апстрим менял эти блоки → останавливаемся, не собирая вслепую.
+          if [ -f internal/vds/patches/compat-probes.patch ]; then
+          patch -p1 --fuzz=0 -d /tmp/vds-merge < internal/vds/patches/compat-probes.patch \
+          || { echo "::error::compat-probes.patch failed — апстрим менял compat.h, патч нужно перегенерировать"; exit 1; }
+          fi
+
           # Previous upstream version from the VDS branch, used for the root-file diff.
           prev_version="$(tr -d '[:space:]' < /tmp/vds-merge/internal/config/version)"
 
@@ -230,7 +297,7 @@ jobs:
           if [[ "$UPSTREAM_REF" == v* ]]; then
             version="${UPSTREAM_REF#v}"
           else
-            version="$(sed -n 's/.*WIREGUARD_VERSION[[:space:]]*"\([^"]*\)".*/\1/p' /tmp/upstream/src/version.h | head -n1)"
+            version="$(sed -n 's/.*WIREGUARD_VERSION[[:space:]]*"$[^"]*$".*/\1/p' /tmp/upstream/src/version.h | head -n1)"
             version="${version%-vds}"
           fi
           [ -n "$version" ] || { echo "::error::could not resolve upstream version"; exit 1; }
@@ -259,21 +326,66 @@ jobs:
             echo "::warning::Previous upstream tag ${prev_version} not found; root-file diff skipped"
           fi
 
-          printf '%s\n' "$changes" > /tmp/root_changes.txt
-          echo "root_changes=$changes" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$version" > /work/out-prepare.env
+          printf 'root_changes=%s\n' "$changes" >> /work/out-prepare.env
           echo "Merged tree prepared, version ${version}-vds, root changes: ${changes:-none}"
+          SCRIPT
+          docker exec -e UPSTREAM_REF merge bash /work/ci-prepare.sh
+          cat "$GITHUB_WORKSPACE/out-prepare.env" >> "$GITHUB_OUTPUT"
 
       - name: Build and test the merged tree
         id: build
-        working-directory: /tmp/vds-merge
         run: |
           set -euo pipefail
+          cat > "$GITHUB_WORKSPACE/ci-build.sh" <<'SCRIPT'
+          set -euo pipefail
+          cd /tmp/vds-merge
           bash scripts/setup.sh -l -y -k "$KERNEL_VERSION" -s
           make -C src print-version
-          kernel_used="$(ls -1 /lib/modules | sort -V | tail -n1)"
-          echo "kernel_version=$kernel_used" >> "$GITHUB_OUTPUT"
-          echo "Built for kernel ${kernel_used}"
+          kernel_used="${KERNEL_VERSION:-$(ls -1 /lib/modules | sort -V | tail -n1)}"
+          ko="$(find "/lib/modules/${kernel_used}" -name 'amneziawg.ko*' | head -n1)"
+          [ -n "$ko" ] || { echo "::error::amneziawg.ko not found for ${kernel_used}"; exit 1; }
+          vermagic="$(modinfo -F vermagic "$ko")"
+          case "$vermagic" in
+            *"$kernel_used"*) ;;
+            *) echo "::error::vermagic mismatch: module '$vermagic' vs kernel '$kernel_used'"; exit 1 ;;
+          esac
+
+          # Проверка символов: всё, что требует модуль, должно экспортироваться ядром.
+          # (modpost уже валидирует основные случаи; это явный гейт + отчёт.)
+          symvers="/usr/src/kernels/${kernel_used}/Module.symvers"
+          [ -f "$symvers" ] || { echo "::error::Module.symvers not found for ${kernel_used}"; exit 1; }
+          nm -u "$ko" | awk '{print $NF}' | sed 's/.*@//' | sort -u | grep -Ev '^(__crc_|mcount$|_ftrace)' > /tmp/undef.txt || true
+          awk '{print $2}' "$symvers" | sort -u > /tmp/exported.txt
+          missing="$(comm -23 /tmp/undef.txt /tmp/exported.txt | sed '/^$/d')"
+          if [ -n "$missing" ]; then
+            {
+              echo "Missing symbols in kernel ${kernel_used}:"
+              printf '%s\n' "$missing" | sed 's/^/- /'
+            } > /work/out-symbols.txt
+            echo "::error::Symbols missing in kernel ${kernel_used}: $(printf '%s ' $missing)"
+            exit 1
+          fi
+
+          printf 'kernel_version=%s\n' "$kernel_used" > /work/out-build.env
+          printf 'vermagic=%s\n' "$vermagic" >> /work/out-build.env
+          echo "Built for kernel ${kernel_used} (vermagic OK)"
+          SCRIPT
+          docker exec -e KERNEL_VERSION merge bash /work/ci-build.sh
+          cat "$GITHUB_WORKSPACE/out-build.env" >> "$GITHUB_OUTPUT"
+          {
+            echo "- tested kernel: \`${KERNEL_VERSION:-latest}\`"
+            echo "- vermagic: \`$(grep -oP 'vermagic=\K.*' "$GITHUB_WORKSPACE/out-build.env")\`"
+            echo "- undefined symbols: resolved against \`${KERNEL_VERSION:-latest}\` Module.symvers"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload missing symbols report
+        if: ${{ failure() && steps.build.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: missing-symbols-${{ github.run_attempt }}
+          path: out-symbols.txt
+          if-no-files-found: ignore
 
       - name: Report upstream root file changes
         if: ${{ steps.prepare.outputs.root_changes != '' && env.TELEGRAM_ENABLED == 'true' && env.NOTIFY_MODE != 'none' }}
@@ -294,17 +406,25 @@ jobs:
 
       - name: Push merge result
         if: ${{ steps.resolve.outputs.dry_run == 'false' }}
-        working-directory: /tmp/vds-merge
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          cat > "$GITHUB_WORKSPACE/ci-push.sh" <<'SCRIPT'
+          set -euo pipefail
+          cd /tmp/vds-merge
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Merge upstream ${UPSTREAM_REF}" || true
           auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -c http.extraheader="AUTHORIZATION: basic ${auth}" push origin "HEAD:${VDS_BRANCH}"
+          SCRIPT
+          docker exec -e GITHUB_TOKEN -e UPSTREAM_REF -e VDS_BRANCH merge bash /work/ci-push.sh
+
+      - name: Stop merge container
+        if: ${{ always() }}
+        run: docker rm -f merge || true
 
   stable:
     needs: merge
@@ -313,6 +433,7 @@ jobs:
     with:
       version: ${{ needs.merge.outputs.version }}
       vds_branch: ${{ needs.merge.outputs.vds_branch }}
+      kernel_version: ${{ needs.merge.outputs.kernel_version }}
       dry_run: false
       notify_mode: ${{ needs.merge.outputs.notify_mode || 'changes' }}
     secrets: inherit

@@ -1,4 +1,4 @@
-name: Build CI Image amneziawg-linux-kernel-module-vds
+name: Build CI Image
 
 permissions:
   contents: read
@@ -16,18 +16,12 @@ on:
         description: "Operation"
         required: true
         default: "build"
-        type: choice
-        options:
-          - build
-          - delete
+        type: string
       dockerfile:
         description: "Dockerfile in location docker/ci-images/"
         required: true
         default: "Dockerfile.new"
-        type: choice
-        options:
-          - Dockerfile.new
-          - Dockerfile.ci
+        type: string
       base_image:
         description: "Base image (passed to Dockerfile as CI_BASE_IMAGE)"
         required: true
@@ -39,10 +33,15 @@ on:
         default: "linux/amd64"
         type: string
       image_name:
-        description: "Build image name"
+        description: "Build image name; names with tmp-* prefix are never pushed"
         required: true
-        default: "amneziawg-kernel-centos10"
+        default: "tmp-centos10"
         type: string
+      push:
+        description: "Push to GHCR (false = local-only build, exported as artifact)"
+        required: false
+        default: true
+        type: boolean
       width_kernel:
         description: "Kernel version (empty = latest, or e.q. 6.12.0-281.el10.x86_64)"
         required: false
@@ -92,10 +91,15 @@ on:
         default: "linux/amd64"
         type: string
       image_name:
-        description: "Build image name"
+        description: "Build image name; names with tmp-* prefix are never pushed"
         required: true
         default: "amneziawg-kernel-centos10"
         type: string
+      push:
+        description: "Push to GHCR (false = local-only build, exported as artifact)"
+        required: false
+        default: true
+        type: boolean
       width_kernel:
         description: "Kernel version (empty = latest, or e.q. 6.12.0-281.el10.x86_64)"
         required: false
@@ -128,6 +132,7 @@ jobs:
       image: ${{ steps.meta.outputs.image }}
       tag: ${{ steps.meta.outputs.tag }}
       sha_tag: ${{ steps.meta.outputs.sha_tag }}
+      push: ${{ steps.meta.outputs.push }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -140,15 +145,41 @@ jobs:
           KERNEL_VER: ${{ inputs.width_kernel }}
           CI_IMAGE_NAME: ${{ inputs.image_name }}
           CI_IMAGE_VER: ${{ vars.AMNEZIA_KERNEL_IMG_VER || '' }}
+          PUSH_INPUT: ${{ inputs.push }}
         run: |
           set -euo pipefail
 
+          push="${PUSH_INPUT}"
+          # tmp-* образы никогда не пушатся, независимо от того, как их вызвали.
+          if [[ "${push}" != "false" && "${CI_IMAGE_NAME}" == tmp-* ]]; then
+            push=false
+          fi
+
+          if [[ "${push}" != "true" ]]; then
+            # Локальная сборка: без обращений к GHCR, счётчик версий не расходуется.
+            tag="tmp-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            sha_tag="sha-${GITHUB_SHA:0:12}"
+            {
+              printf 'push=false\n'
+              printf 'image=tmp-ci-image\n'
+              printf 'tag=%s\n' "${tag}"
+              printf 'sha_tag=%s\n' "${sha_tag}"
+              printf 'image_ref=%s\n' "tmp-ci-image:${tag}"
+              printf 'image_ref_sha=%s\n' "tmp-ci-image:${sha_tag}"
+            } >> "${GITHUB_OUTPUT}"
+            echo "Local-only build (no push): tmp-ci-image:${tag}"
+            exit 0
+          fi
+
           repo_lc="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
-          if [[ "${KERNEL_VER}" = "false" ]]; then
+
+          # Пустой kernel тоже означает "latest" — раньше пустое значение
+          # давало хвостовое тире в имени пакета.
+          if [[ -z "${KERNEL_VER}" || "${KERNEL_VER}" = "false" ]]; then
             image="ghcr.io/${repo_lc}/${CI_IMAGE_NAME}"
           else
             image="ghcr.io/${repo_lc}/${CI_IMAGE_NAME}-${KERNEL_VER}"
-          fi 
+          fi
 
           next_tag() {
             local t="$1"
@@ -218,6 +249,7 @@ jobs:
           sha_tag="sha-${GITHUB_SHA:0:12}"
 
           {
+            printf 'push=true\n'
             printf 'image=%s\n' "${image}"
             printf 'tag=%s\n' "${tag_sanitized}"
             printf 'sha_tag=%s\n' "${sha_tag}"
@@ -226,14 +258,16 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
           echo "Resolved ${image}:${tag_sanitized} (sha tag: ${sha_tag})"
 
-      # Нужен для платформ, отличных от linux/amd64.
+      # Нужен для платформ, отличных от linux/amd64; в локальной сборке не нужен.
       - name: Set up QEMU
+        if: ${{ steps.meta.outputs.push == 'true' }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
+        if: ${{ steps.meta.outputs.push == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -250,13 +284,15 @@ jobs:
             WIDTH_BASE_PACKAGES=${{ inputs.width_base_packages }}
           context: .
           file: docker/ci-images/${{ inputs.dockerfile }}
-          platforms: ${{ inputs.build_platforms }}
-          push: true
+          platforms: ${{ steps.meta.outputs.push == 'true' && inputs.build_platforms || 'linux/amd64' }}
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          load: ${{ steps.meta.outputs.push != 'true' }}
           tags: |
             ${{ steps.meta.outputs.image_ref }}
             ${{ steps.meta.outputs.image_ref_sha }}
 
       - name: Push latest/lts tags
+        if: ${{ steps.meta.outputs.push == 'true' }}
         shell: bash
         env:
           IMAGE: ${{ steps.meta.outputs.image }}
@@ -267,6 +303,21 @@ jobs:
             -t "${IMAGE}:latest" \
             -t "${IMAGE}:lts" \
             "${IMAGE}:${SHA_TAG}"
+
+      - name: Export local image artifact
+        if: ${{ steps.meta.outputs.push != 'true' }}
+        run: |
+          set -euo pipefail
+          docker save "${{ steps.meta.outputs.image_ref_sha }}" -o ci-image.tar
+
+      - name: Upload local image artifact
+        if: ${{ steps.meta.outputs.push != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-image-tmp
+          path: ci-image.tar
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Save image metadata
         shell: bash
@@ -302,11 +353,13 @@ jobs:
           CI_IMAGE_SHA_TAG: ${{ steps.meta.outputs.sha_tag }}
           CI_IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
           CI_IMAGE_REF_SHA: ${{ steps.meta.outputs.image_ref_sha }}
+          PUSH: ${{ steps.meta.outputs.push }}
         run: |
           set -euo pipefail
           {
             echo "### CI image metadata"
             echo
+            echo "- push: \`${PUSH}\`"
             echo "- image: \`${CI_IMAGE}\`"
             echo "- tag: \`${CI_IMAGE_TAG}\`"
             echo "- sha tag: \`${CI_IMAGE_SHA_TAG}\`"
@@ -315,6 +368,7 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Print usage hint
+        if: ${{ steps.meta.outputs.push == 'true' }}
         shell: bash
         env:
           CI_IMAGE: ${{ steps.meta.outputs.image }}
