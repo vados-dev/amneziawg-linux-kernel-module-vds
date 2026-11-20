@@ -122,7 +122,7 @@ on:
         type: string
 
 jobs:
-  build-and-push:
+  build-ci-image:
     if: ${{ inputs.operation == 'build' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
