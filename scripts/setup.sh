@@ -45,9 +45,11 @@ die() { echo "[ERROR] [setup.sh] - $*" >&2; exit 1; }
 # Резолв целевого ядра. Пустое -k = самое свежее установленное ядро.
 # Источник истины — /lib/modules, а не uname -r: внутри контейнера uname
 # показывает ядро хоста-раннера (Ubuntu), а не ядро, установленное в образе.
+# В выборку идут только директории: файлы и symlinks (вроде «current»)
+# в сортировку не попадают и не могут сбить выбор.
 if [ -z "$KERNEL" ]; then
-  if [ -d /lib/modules ] && ls -1 /lib/modules | grep -q .; then
-    KERNEL="$(ls -1 /lib/modules | sort -V | tail -n1)"
+  if [ -d /lib/modules ] && [ -n "$(ls -d /lib/modules/*/ 2>/dev/null)" ]; then
+    KERNEL="$(for d in /lib/modules/*/; do basename "$d"; done | sort -V | tail -n1)"
   else
     KERNEL="$(uname -r)"
   fi

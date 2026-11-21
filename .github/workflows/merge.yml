@@ -337,7 +337,7 @@ jobs:
           cd /tmp/vds-merge
           bash scripts/setup.sh -l -y -k "$KERNEL_VERSION" -s
           make -C src print-version
-          kernel_used="${KERNEL_VERSION:-$(ls -1 /lib/modules | sort -V | tail -n1)}"
+          kernel_used="${KERNEL_VERSION:-$(for d in /lib/modules/*/; do basename "$d"; done | sort -V | tail -n1)}"
           ko="$(find "/lib/modules/${kernel_used}" -name 'amneziawg.ko*' | head -n1)"
           [ -n "$ko" ] || { echo "::error::amneziawg.ko not found for ${kernel_used}"; exit 1; }
           vermagic="$(modinfo -F vermagic "$ko")"

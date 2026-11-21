@@ -277,8 +277,6 @@ jobs:
                 org.opencontainers.image.version.amneziawg="${AWG_VERSION}" \
                 org.opencontainers.image.source="https://github.com/amnezia-vpn/amneziawg-linux-kernel-module"
 
-          # Ядро по умолчанию для setup.sh: свежайшее из установленных.
-          RUN ln -sfn "/lib/modules/$(ls -1 /lib/modules | sort -V | tail -n1)" /lib/modules/current || true
           DOCKERFILE
           echo "Dockerfile generated"
           cat /tmp/ci-image.Dockerfile
