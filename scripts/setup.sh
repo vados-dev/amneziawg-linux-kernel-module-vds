@@ -16,6 +16,7 @@
 #   -t <ref>       ref для standalone: тег v*-vds или ветка
 #                  (master/stable/testing-*; по умолчанию master)
 #   --prebuilt     принудительно готовый пакет (апстрим из copr, БЕЗ правок VDS)
+#   --remove       удалить модуль (DKMS) и запись автозагрузки
 
 set -euo pipefail
 
@@ -27,6 +28,9 @@ ME_CLEAN="${ME_SELF%.*}"
 PROGRAM="${0##*/}"
 ARGS=( "$@" )
 PARENT_DIR="$(dirname "${SELF_DIR}")"
+
+echo $PARENT_DIR
+exit 0
 
 if [ -t 0 ]; then
   cmd()  { printf '  [\033[1;33m✨\033[0m]\033[1m %s \033[0m\n' "$*" >&2; "$@"; }
@@ -53,7 +57,7 @@ REF_EXPLICIT=0
 # Влияет только когда скрипт запущен вне репозитория.
 REF="${REF:-master}"
 
-usage() { sed -n '2,16p' "${SELF}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,19p' "${SELF}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -68,15 +72,15 @@ while [ $# -gt 0 ]; do
     --prebuilt) FORCE_PREBUILT=1 ;;
     --remove) REMOVE=1 ;;
     -t)
-      shift
-      REF="${1:?}"
+      [ $# -ge 2 ] || { err "флаг -t требует значение"; usage; exit 2; }
+      REF="$2"
       REF_EXPLICIT=1
-      ;;
+      shift ;;
     --ref)
-      shift
-      REF="${1:?}"
+      [ $# -ge 2 ] || { err "флаг --ref требует значение"; usage; exit 2; }
+      REF="$2"
       REF_EXPLICIT=1
-      ;;
+      shift ;;
     -h|--help) usage; exit 0 ;;
     *) err "неизвестный аргумент: $1"; usage; exit 2 ;;
   esac
@@ -89,9 +93,16 @@ done
 # исходники всё равно переезжают в /usr/src/<MODULE>-<ver> через dkms-install,
 # поэтому временную папку можно смело удалять по завершении (trap EXIT).
 REPO_ROOT=""
-if [ -d "${PARENT_DIR}/src" ]; then
+if [ "$REMOVE" = "1" ]; then
+  # Случай 1: запрошено удаление (--remove). Дерево исходников не нужно,
+  # REPO_ROOT остаётся пустым — ничего не делаем.
+  :
+elif [ -d "${PARENT_DIR}/src" ]; then
+  # Случай 2: скрипт лежит в репозитории (рядом есть src/).
+  # Дерево уже на диске — просто запоминаем его путь.
   REPO_ROOT="${PARENT_DIR}"
 else
+  # Случай 3: скрипт скачан отдельно, исходников рядом нет.
   STANDALONE=1
   if [ "$REF_EXPLICIT" = "0" ]; then
     log "Ref не задан явно (-t) — использую master по умолчанию."
@@ -145,6 +156,7 @@ log "Целевое ядро: $KERNEL"
 
 confirm() {
   [ "$ASSUME_YES" = "1" ] && return 0
+  [ -t 0 ] || die "Нет интерактивного терминала — используйте -y"
   read -r -p "$1 [y/N] " a; [ "$a" = "y" ] || die "Отменено пользователем"
 }
 
@@ -242,11 +254,14 @@ build_local() {
 remove_dkms_module() {
     # Удаляем все установленные версии модуля из DKMS.
     local found=0
+    if rpm -q amneziawg-dkms >/dev/null 2>&1; then
+      warn "Модуль установлен пакетом amneziawg-dkms — корректнее удалить его через 'dnf remove amneziawg-dkms'."
+    fi
     while read -r ver _; do
         [ -n "$ver" ] || continue
         found=1
         cmd dkms remove -m "$MODULE_NAME" -v "$ver" --all
-    done < <(dkms status 2>/dev/null | awk -F'[ /,]' -v m="$MODULE_NAME" '$1==m {print $2}')
+    done < <(dkms status 2>/dev/null | awk -F'[ /,:]' -v m="$MODULE_NAME" '$1==m {print $2}')
     [ "$found" = "1" ] || log "Модуль в DKMS не найден — удалять нечего."
 }
 
@@ -265,7 +280,8 @@ del_awg_from_modules() {
 
 load_module() {
     local out
-    if ! out="$(cmd modprobe amneziawg 2>&1)"; then
+    log "Выполняю: modprobe amneziawg"
+    if ! out="$(modprobe amneziawg 2>&1)"; then
         err "Модуль не загрузился: $out"
         return 1
     fi
