@@ -250,6 +250,26 @@ jobs:
           echo "awg=$awg" >> "$GITHUB_OUTPUT"
           echo "Probed: kernel=$kernel amneziawg-dkms=$awg"
 
+      - name: Check existing image
+        id: existing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ env.CI_IMAGE_REGISTRY_REF }}
+        run: |
+          set -euo pipefail
+          if printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin 2>/dev/null \
+             && docker pull -q "${REF}:current" >/dev/null 2>&1; then
+            k="$(docker inspect -f '{{ index .Config.Labels "org.opencontainers.image.version.kernel" }}' "${REF}:current" 2>/dev/null || true)"
+            a="$(docker inspect -f '{{ index .Config.Labels "org.opencontainers.image.version.amneziawg" }}' "${REF}:current" 2>/dev/null || true)"
+            {
+              echo "kernel=$k"
+              echo "awg=$a"
+            } >> "$GITHUB_OUTPUT"
+            echo "existing :current: kernel=$k amneziawg=$a"
+          else
+            echo "no existing :current — will build"
+          fi
+
       - name: Generate Dockerfile
         run: |
           set -euo pipefail
@@ -283,6 +303,7 @@ jobs:
 
       - name: Build and push CI image
         id: meta
+        if: steps.existing.outputs.kernel != steps.probe.outputs.kernel || steps.existing.outputs.awg != steps.probe.outputs.awg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REF: ${{ env.CI_IMAGE_REGISTRY_REF }}

@@ -276,12 +276,12 @@ jobs:
           if [ "$is_tag" = "1" ]; then
             version="$(git -C /tmp/upstream show "${target}:src/version.h" \
               | grep -m1 '#define[[:space:]]*WIREGUARD_VERSION' \
-              | sed -n 's/.*"$.*$".*/\1/p')"
+              | awk -F'"' '{print $2}')"
           else
             vh="/tmp/upstream/src/version.h"
             [ -f "$vh" ] || die "src/version.h not found in upstream tree"
             version="$(grep -m1 '#define[[:space:]]*WIREGUARD_VERSION' "$vh" \
-              | sed -n 's/.*"$.*$".*/\1/p')"
+              | awk -F'"' '{print $2}')"
           fi
 
           version="${version%-vds}"
