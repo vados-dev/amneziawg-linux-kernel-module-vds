@@ -180,6 +180,57 @@ ln -s /path/to/your/kernel/sources /usr/src/amneziawg-3.1.20260812-vds/kernel
 
 При обновлении ядра в будущем может потребоваться обновить дерево исходных кодов и символические ссылки.
 
+
+# Обновлено
+
+## Установка
+
+### Способ 1: стабильная версия по тегу (рекомендуется)
+
+Установка без клонирования репозитория: скрипт скачивается во временную папку,
+ставит исходники модуля в DKMS-дерево и собирает их там. После установки
+временную папку можно удалить — всё нужное уже в `/usr/src/`.
+
+Скрипт сам проверяет права: запускать только под рутом (в CentOS Stream sudo не требуется).
+
+    tmpdir="$(mktemp -d -t setup-amneziawg-mod-XXXXXX)"
+    cd "$tmpdir"
+
+    # скачать установщик (со стабильного тега):
+    curl -fsSLo setup.sh \
+      https://raw.githubusercontent.com/vados-dev/amneziawg-linux-kernel-module-vds/v3.1.20261113-02-vds/scripts/setup.sh
+
+    # зависимости (если ещё не установлены):
+    bash setup.sh -d -y
+
+    # сборка и установка модуля (по умолчанию — под текущее ядро):
+    bash setup.sh -l -y
+
+    # при необходимости — явно указать ядро:
+    bash setup.sh -l -y -k 6.12.0-284.el10.x86_64 -s
+
+    # чистим за собой:
+    cd /
+    rm -rf "$tmpdir"
+
+    modinfo amneziawg | grep ^version
+
+Для master вместо тега в URL подставь `master`:
+
+    https://raw.githubusercontent.com/vados-dev/amneziawg-linux-kernel-module-vds/master/scripts/setup.sh
+
+### Способ 2: клонирование репозитория (для разработки и стендов)
+
+    git clone https://github.com/vados-dev/amneziawg-linux-kernel-module-vds.git
+    cd amneziawg-linux-kernel-module-vds
+
+    # список стабильных версий (новейшая внизу):
+    git tag -l 'v*-vds'
+
+    git checkout v3.1.20261113-02-vds
+    bash scripts/setup.sh -d -y
+    bash scripts/setup.sh -l -y -k 6.12.0-284.el10.x86_64 -s
+
 ## Лицензия
 
 Проект распространяется по лицензии [GPLv2](COPYING).
