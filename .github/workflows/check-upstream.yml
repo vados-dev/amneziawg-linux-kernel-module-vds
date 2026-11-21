@@ -269,6 +269,7 @@ jobs:
           else
             echo "no existing :current — will build"
           fi
+          echo "image_ref=${REF}:current" >> "$GITHUB_OUTPUT"
 
       - name: Generate Dockerfile
         run: |
@@ -319,7 +320,6 @@ jobs:
             -t "${REF}:current" \
             /tmp
           docker push "${REF}:current"
-          echo "image_ref=${REF}:current" >> "$GITHUB_OUTPUT"
           echo "Pushed ${REF}:current (kernel=${KERNEL}, amneziawg-dkms=${AWG})"
 
       - name: Delete stale image versions
@@ -328,7 +328,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.event.repository.owner.login }}
-          PACKAGE: amneziawg-linux-kernel-module-vds/centos10
+          PACKAGE: centos10
         run: |
           set -euo pipefail
           # Пакет после ghcr.io/<owner>/ — с вложенным именем, без owner-префикса.
