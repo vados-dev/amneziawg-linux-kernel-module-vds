@@ -289,7 +289,7 @@ jobs:
           if [[ "$UPSTREAM_REF" == v* ]]; then
             version="${UPSTREAM_REF#v}"
           else
-            version="$(sed -n 's/.*WIREGUARD_VERSION[[:space:]]*"$[^"]*$".*/\1/p' /tmp/upstream/src/version.h | head -n1)"
+            version="$(awk -F'"' '/WIREGUARD_VERSION/ {print $2; exit}' /tmp/upstream/src/version.h)"
             version="${version%-vds}"
           fi
           [ -n "$version" ] || { echo "::error::could not resolve upstream version"; exit 1; }

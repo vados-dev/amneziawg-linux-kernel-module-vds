@@ -52,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           # none = отправку выключить полностью; changes/always — как есть.
-          raw="${NOTIFY_MODE:-none}"
+          raw="${NOTIFY_MODE:-changes}"
           case "$raw" in
             none) mode=none ;;
             changes|always) mode="$raw" ;;
