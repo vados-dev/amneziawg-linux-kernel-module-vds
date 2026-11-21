@@ -327,18 +327,13 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.event.repository.owner.login }}
-          PACKAGE: centos10
+          PACKAGE: amneziawg-linux-kernel-module-vds%2Fcentos10
         run: |
           set -euo pipefail
-          # Пакет после ghcr.io/<owner>/ — с вложенным именем, без owner-префикса.
-          # Ищем на орг-эндпоинте, потом на user-ском.
-          if gh api "/orgs/${OWNER}/packages/container/${PACKAGE}/versions" >/dev/null 2>&1; then
-            base="/orgs/${OWNER}/packages/container/${PACKAGE}"
-          elif gh api "/user/packages/container/${PACKAGE}/versions" >/dev/null 2>&1; then
+          if gh api "/user/packages/container/${PACKAGE}/versions" >/dev/null 2>&1; then
             base="/user/packages/container/${PACKAGE}"
           else
-            echo "::warning::package ${PACKAGE} not found — skipping cleanup"
+            echo "::warning::package not visible via /user/packages — likely GITHUB_TOKEN limitation on user-owned packages"
             exit 0
           fi
           ids="$(gh api "${base}/versions" --paginate --jq '.[].id')"
@@ -353,7 +348,7 @@ jobs:
             gh api -X DELETE "${base}/versions/$id" \
               && echo "deleted stale version $id" \
               || echo "::warning::failed to delete version $id"
-          done
+          fi
 
       - name: Notify Telegram (build failure)
         if: ${{ failure() && env.NOTIFY_MODE != 'none' }}
