@@ -37,7 +37,7 @@ on:
           - always
 
 permissions:
-  contents: read
+  contents: write
   issues: write
   packages: write
 
