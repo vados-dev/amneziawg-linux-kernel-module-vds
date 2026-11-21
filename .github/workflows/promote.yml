@@ -1,11 +1,6 @@
 name: Promote testing to master
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Версия из ветки testing-<version> (например 3.1.20261113-02)"
-        required: true
-        type: string
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -18,10 +13,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve last testing version
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(git ls-remote --heads origin 'refs/heads/testing-*-vds' \
+            | sed 's|.*refs/heads/testing-||; s|-vds$||' \
+            | sort -V | tail -n1)"
+          [ -n "$VERSION" ] || { echo "::error::Нет ни одной ветки testing-*-vds"; exit 1; }
+          echo "Версия: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Rotate stable <- master <- testing
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ steps.resolve.outputs.version }}
         run: |
           set -euo pipefail
           branch="testing-${VERSION}-vds"
