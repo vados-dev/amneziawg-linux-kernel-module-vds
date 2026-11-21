@@ -8,6 +8,7 @@
 ## Содержание
 
 - [Установка](#установка)
+  - [CentOS быстрый старт](#CentOS) 
   - [Ubuntu](#ubuntu)
   - [Debian](#debian)
   - [Linux Mint](#linux-mint)
@@ -18,6 +19,70 @@
 - [Лицензия](#лицензия)
 
 ## Установка
+
+### CentOS быстрый старт
+### Способ 1: стабильная версия по тегу (рекомендуется)
+Установка без клонирования репозитория: скрипт скачивается во временную папку,
+ставит исходники модуля в DKMS-дерево и собирает их там. После установки
+временную папку можно удалить — всё нужное уже в `/usr/src/`.
+Скрипт сам проверяет права: запускать только под рутом (в CentOS Stream sudo не требуется).
+
+    tmpdir="$(mktemp -d -t setup-amneziawg-mod-XXXXXX)
+    cd "$tmpdir"
+
+    # скачать установщик (со стабильного тега):
+    tmpdir="$(mktemp -d -t setup-amneziawg-mod-XXXXXX)" && cd "$tmpdir" && \
+    curl -fsSLo setup.sh https://raw.githubusercontent.com/vados-dev/amneziawg-linux-kernel-module-vds/testing-3.1.20261113-02-vds/scripts/setup.sh && \
+    chmod +x setup.sh && ./setup.sh [flags]
+    
+    AmneziaWG (VDS) — установка зависимостей и модуля ядра.
+    Работает автономно на чистой машине:
+    curl -fsSL <url>/setup.sh -o setup.sh && bash setup.sh -y
+  
+    Режимы:
+      (без флагов)   зависимости + модуль из готового пакета (копр/репозиторий)
+      -l             сборка из локального дерева (src/ рядом с этим скриптом)
+      -d             только зависимости
+      -k <ver>       целевое ядро, напр. 6.12.0-281.el10.x86_64
+                     (пустое значение или без флага = самое свежее из /lib/modules,
+                      в CI это обязательно: uname -r показывает ядро хоста, не контейнера)
+      -y             не спрашивать подтверждений
+      -s             тихая установка: не трогать сеть и сервисы (безопасно для CI)
+      -t <ref>       ref для standalone: тег v*-vds или ветка
+                     (master/stable/testing-*; по умолчанию master)
+      --prebuilt     принудительно готовый пакет (апстрим из copr, БЕЗ правок VDS)
+      --remove       удалить модуль (DKMS) и запись автозагрузки
+
+    # зависимости (если ещё не установлены):
+    bash setup.sh -d -y
+
+    # сборка и установка модуля (по умолчанию — под текущее ядро):
+    bash setup.sh -l -y
+
+    # при необходимости — явно указать ядро:
+    bash setup.sh -l -y -k 6.12.0-284.el10.x86_64 -s
+
+    # чистим за собой:
+    cd /
+    rm -rf "$tmpdir"
+
+    modinfo amneziawg | grep ^version
+
+Для master вместо тега в URL подставь `master`:
+
+    https://raw.githubusercontent.com/vados-dev/amneziawg-linux-kernel-module-vds/master/scripts/setup.sh
+
+### Способ 2: клонирование репозитория (для разработки и стендов)
+
+    git clone https://github.com/vados-dev/amneziawg-linux-kernel-module-vds.git
+    cd amneziawg-linux-kernel-module-vds
+
+    # список стабильных версий (новейшая внизу):
+    git tag -l 'v*-vds'
+
+    git checkout v3.1.20261113-02-vds
+    bash scripts/setup.sh -d -y
+    bash scripts/setup.sh -l -y -k 6.12.0-284.el10.x86_64 -s
 
 ### Ubuntu
 
