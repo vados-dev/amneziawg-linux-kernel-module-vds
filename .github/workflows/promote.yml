@@ -1,0 +1,37 @@
+name: Promote testing to master
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия из ветки testing-<version> (например 3.1.20261113-02)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward master to testing
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          branch="testing-${VERSION}"
+          git fetch origin "$branch" master
+          # Перенос возможен только вперёд: testing должен быть потомком master.
+          if ! git merge-base --is-ancestor origin/master "origin/${branch}"; then
+            echo "::error::${branch} не является потомком master — ff-merge невозможен"
+            exit 1
+          fi
+          git switch master
+          git merge --ff-only "origin/${branch}"
+          git push origin HEAD:master
+          echo "master продвинут на ${branch} (версия ${VERSION}-vds)"
