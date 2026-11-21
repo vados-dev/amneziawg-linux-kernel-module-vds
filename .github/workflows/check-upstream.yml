@@ -227,11 +227,11 @@ jobs:
           KERNEL_IN: ${{ inputs.kernel_version }}
         run: |
           set -euo pipefail
-          # Та же логика источников, что и в Dockerfile ниже
-          # (quay.io/centos:stream10 + crb + copr tigro/amneziawg).
+          # Та же логика источников, что и в Dockerfile ниже:
+          # stream10 + epel (copr tigro/amneziawg без него не подключить) + copr.
           out="$(docker run --rm quay.io/centos/centos:stream10 bash -c '
             set -euo pipefail
-            dnf -y install dnf-plugins-core -q >/dev/null
+            dnf -y install -q dnf-plugins-core epel-release >/dev/null
             dnf config-manager --set-enabled crb >/dev/null 2>&1 || true
             dnf copr enable -y tigro/amneziawg >/dev/null 2>&1
             dnf makecache -q >/dev/null 2>&1
@@ -259,15 +259,18 @@ jobs:
           ARG KERNEL_VERSION
           ARG AWG_VERSION
 
-          RUN dnf -y install dnf-plugins-core && \
-              dnf config-manager --set-enabled crb >/dev/null 2>&1 || true && \
-              dnf copr enable -y tigro/amneziawg && \
-              dnf -y install \
+          # EPEL обязателен: amneziawg-dkms тянет dkms и зависимости из epel.
+          RUN dnf -y install dnf-plugins-core epel-release
+          RUN dnf config-manager --set-enabled crb >/dev/null 2>&1 || true
+          RUN dnf copr enable -y tigro/amneziawg
+
+          # amneziawg-dkms без pin: ставим то, что copr отдаёт на момент сборки,
+          # фактическая версия видна в LABEL ниже.
+          RUN dnf -y install \
                 "kernel-${KERNEL_VERSION}" "kernel-core-${KERNEL_VERSION}" \
                 "kernel-devel-${KERNEL_VERSION}" "kernel-devel-matched-${KERNEL_VERSION}" \
                 "kernel-headers-${KERNEL_VERSION}" \
-                gcc make git tar gzip which curl libmnl-devel pkgconf dkms \
-                "amneziawg-dkms-${AWG_VERSION}" && \
+                gcc make git tar gzip which curl libmnl-devel pkgconf dkms amneziawg-dkms && \
               dnf clean all
 
           LABEL org.opencontainers.image.version.kernel="${KERNEL_VERSION}" \
@@ -308,7 +311,6 @@ jobs:
           package-name: vados-dev/${{ github.event.repository.name }}/centos10
           package-type: container
           min-versions-to-keep: 1
-
 
       - name: Notify Telegram (build failure)
         if: ${{ failure() && env.NOTIFY_MODE != 'none' }}
