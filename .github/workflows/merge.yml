@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: Merge Upstream
 
 on:
@@ -29,7 +30,7 @@ on:
         default: true
         type: boolean
       notify_mode:
-        description: "none|inherit|changes|always; none and inherit defer to repository variable NOTIFY_MODE"
+        description: "none|changes|always; none = disable notifications; changes = failures and real merges; always = also dry-run results"
         required: false
         default: ""
         type: string
@@ -66,13 +67,12 @@ on:
         default: true
         type: boolean
       notify_mode:
-        description: "none/inherit: use repository variable NOTIFY_MODE; changes: failures and real merges; always: also dry-run results"
+        description: "none: disable notifications; changes: failures and real merges; always: also dry-run results"
         required: false
-        default: inherit
+        default: changes
         type: choice
         options:
           - none
-          - inherit
           - changes
           - always
       ci_image_source:
@@ -134,24 +134,19 @@ jobs:
           set -euo pipefail
           # none = отправку выключить полностью; inherit = взять NOTIFY_MODE из
           # репозитарной переменной (fallback: changes); changes/always — как есть.
-          raw="${NOTIFY_MODE_INPUT:-inherit}"
+          raw="${NOTIFY_MODE:-changes}"
           case "$raw" in
             none) mode=none ;;
             changes|always) mode="$raw" ;;
-            inherit) mode="${NOTIFY_MODE_VAR:-changes}" ;;
-            *) echo "::warning::Unknown NOTIFY_MODE '${raw}' - falling back to inherit"; mode="${NOTIFY_MODE_VAR:-changes}" ;;
+            *) echo "::warning::Unknown NOTIFY_MODE '${raw}' - falling back to changes"; mode="${NOTIFY_MODE_VAR:-changes}" ;;
           esac
           case "$mode" in
             none|changes|always) ;;
             *) echo "::warning::Unknown NOTIFY_MODE '${mode}' - falling back to changes"; mode=changes ;;
           esac
-          if [ "${TELEGRAM_ENABLED:-true}" != "true" ]; then
-            echo "TELEGRAM_NOTIFY=false - notifications disabled"
-            mode=none
-          fi
           echo "NOTIFY_MODE=$mode" >> "$GITHUB_ENV"
           echo "notify_mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "notify_mode=${mode} (input=${raw}, repository=${NOTIFY_MODE_VAR:-unset})"
+          echo "notify_mode=${mode} (input=${raw})"
 
       - name: Resolve inputs
         id: resolve
@@ -385,7 +380,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Report upstream root file changes
-        if: ${{ steps.prepare.outputs.root_changes != '' && env.TELEGRAM_ENABLED == 'true' && env.NOTIFY_MODE != 'none' }}
+        if: ${{ steps.prepare.outputs.root_changes != '' && env.NOTIFY_MODE != 'none' }}
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -441,7 +436,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Notify Telegram on result
-        if: ${{ env.TELEGRAM_ENABLED == 'true' }}
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

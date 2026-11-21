@@ -24,7 +24,7 @@ on:
         default: true
         type: boolean
       notify_mode:
-        description: "none|inherit|changes|always; none and inherit defer to repository variable NOTIFY_MODE"
+        description: "none|changes|always; none and inherit defer to repository variable NOTIFY_MODE"
         required: false
         default: ""
         type: string
@@ -51,17 +51,16 @@ on:
         default: true
         type: boolean
       notify_mode:
-        description: "none|inherit|changes|always; none and inherit defer to repository variable NOTIFY_MODE"
+        description: "none|changes|always; none = disable notifications; changes = failures and real merges; always = also dry-run results"
         required: false
-        default: inherit
+        default: changes
         type: string
 
 permissions:
   contents: write
 
 env:
-  TELEGRAM_ENABLED: ${{ vars.TELEGRAM_NOTIFY != 'false' }}
-  NOTIFY_MODE: ${{ inputs.notify_mode || 'inherit' }}
+  NOTIFY_MODE: ${{ inputs.notify_mode || 'changes' }}
 
 jobs:
   release:
@@ -78,24 +77,19 @@ jobs:
           set -euo pipefail
           # none = отправку выключить полностью; inherit = взять NOTIFY_MODE из
           # репозитарной переменной (fallback: changes); changes/always — как есть.
-          raw="${NOTIFY_MODE_INPUT:-inherit}"
+          raw="${NOTIFY_MODE:-changes}"
           case "$raw" in
             none) mode=none ;;
             changes|always) mode="$raw" ;;
-            inherit) mode="${NOTIFY_MODE_VAR:-changes}" ;;
-            *) echo "::warning::Unknown NOTIFY_MODE '${raw}' - falling back to inherit"; mode="${NOTIFY_MODE_VAR:-changes}" ;;
+            *) echo "::warning::Unknown NOTIFY_MODE '${raw}' - falling back to changes"; mode=changes ;;
           esac
           case "$mode" in
             none|changes|always) ;;
             *) echo "::warning::Unknown NOTIFY_MODE '${mode}' - falling back to changes"; mode=changes ;;
           esac
-          if [ "${TELEGRAM_ENABLED:-true}" != "true" ]; then
-            echo "TELEGRAM_NOTIFY=false - notifications disabled"
-            mode=none
-          fi
           echo "NOTIFY_MODE=$mode" >> "$GITHUB_ENV"
           echo "notify_mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "notify_mode=${mode} (input=${raw}, repository=${NOTIFY_MODE_VAR:-unset})"
+          echo "notify_mode=${mode} (input=${raw})"
 
       - name: Resolve version, tag and branch
         id: version
@@ -178,7 +172,7 @@ jobs:
           git push origin +HEAD:stable
 
       - name: Notify Telegram
-        if: ${{ always() && env.TELEGRAM_ENABLED == 'true' && env.NOTIFY_MODE != 'none' }}
+        if: ${{ always() && env.NOTIFY_MODE != 'none' }}
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

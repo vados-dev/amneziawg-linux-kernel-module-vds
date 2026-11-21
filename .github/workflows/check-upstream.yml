@@ -23,7 +23,7 @@ on:
       notify_mode:
         description: "none: use env variable NOTIFY_MODE; changes: only new tags and failures; always: also report in-sync runs"
         required: false
-        default: none
+        default: changes
         type: choice
         options:
           - none
@@ -37,7 +37,7 @@ permissions:
 
 env:
   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
-  NOTIFY_MODE: ${{ inputs.notify_mode }}
+  NOTIFY_MODE: ${{ inputs.notify_mode || 'changes' }}
   AUTO_MERGE: ${{ inputs.auto_merge }}
   DRY_RUN: ${{ inputs.dry_run }}
 
@@ -51,26 +51,20 @@ jobs:
         id: notify
         run: |
           set -euo pipefail
-          # none = отправку выключить полностью; inherit = взять NOTIFY_MODE из
-          # репозитарной переменной (fallback: changes); changes/always — как есть.
-          raw="${NOTIFY_MODE_INPUT:-inherit}"
+          # none = отправку выключить полностью; changes/always — как есть.
+          raw="${NOTIFY_MODE:-none}"
           case "$raw" in
             none) mode=none ;;
             changes|always) mode="$raw" ;;
-            inherit) mode="${NOTIFY_MODE_VAR:-changes}" ;;
-            *) echo "::warning::Unknown NOTIFY_MODE '${raw}' - falling back to inherit"; mode="${NOTIFY_MODE_VAR:-changes}" ;;
+            *) echo "::warning::Unknown NOTIFY_MODE '${raw}' - falling back to changes"; mode=changes ;;
           esac
           case "$mode" in
             none|changes|always) ;;
             *) echo "::warning::Unknown NOTIFY_MODE '${mode}' - falling back to changes"; mode=changes ;;
           esac
-          if [ "${TELEGRAM_ENABLED:-true}" != "true" ]; then
-            echo "TELEGRAM_NOTIFY=false - notifications disabled"
-            mode=none
-          fi
           echo "NOTIFY_MODE=$mode" >> "$GITHUB_ENV"
           echo "notify_mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "notify_mode=${mode} (input=${raw}, repository=${NOTIFY_MODE_VAR:-unset})"
+          echo "notify_mode=${mode} (input=${raw})"
 
       - name: Resolve target upstream tag
         id: resolve
@@ -188,7 +182,7 @@ jobs:
             -F dry_run="$DRY_RUN"
 
       - name: Notify Telegram
-        if: ${{ always() && env.TELEGRAM_ENABLED == 'true' && env.NOTIFY_MODE != 'none' }}
+        if: ${{ always() && env.NOTIFY_MODE != 'none' }}
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
