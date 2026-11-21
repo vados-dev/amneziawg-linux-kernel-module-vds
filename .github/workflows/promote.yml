@@ -9,7 +9,7 @@ jobs:
   promote:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -52,8 +52,7 @@ jobs:
           if [ -n "$prev_version" ]; then
             archive_tag="v${prev_version}-vds"
             if git rev-parse -q --verify "refs/tags/${archive_tag}" >/dev/null 2>&1; then
-              echo "::error::tag ${archive_tag} уже существует — повторный промоут той же ротации?"
-              exit 1
+              echo "::warning::tag ${archive_tag} уже существует — пропускаю."
             fi
             msg="Stable: amneziawg ${prev_version}-vds"
             if [ -n "$prev_kernel" ]; then
