@@ -127,7 +127,8 @@ install_prebuilt_debian() {
 build_local() {
   local script_dir src_dir ver
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  src_dir="$script_dir/src"
+  # src/ лежит рядом со scripts/, а не внутри неё: scripts/../src
+  src_dir="$(dirname "$script_dir")/src"
   [ -f "$src_dir/Makefile" ] || die "-l требует локального дерева: не найден $src_dir/Makefile"
 
   ver="$(make -C "$src_dir" print-version 2>/dev/null)" || die "Не удалось прочитать версию из src/version.h"

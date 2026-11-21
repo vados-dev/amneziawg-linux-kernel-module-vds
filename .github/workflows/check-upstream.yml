@@ -303,12 +303,36 @@ jobs:
 
       - name: Delete stale image versions
         if: ${{ always() }}
-        uses: actions/delete-package-versions@v5
         continue-on-error: true
-        with:
-          package-name: vados-dev/${{ github.event.repository.name }}/centos10
-          package-type: container
-          min-versions-to-keep: 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.event.repository.owner.login }}
+          PACKAGE: amneziawg-linux-kernel-module-vds/centos10
+        run: |
+          set -euo pipefail
+          # Пакет после ghcr.io/<owner>/ — с вложенным именем, без owner-префикса.
+          # Ищем на орг-эндпоинте, потом на user-ском.
+          if gh api "/orgs/${OWNER}/packages/container/${PACKAGE}/versions" >/dev/null 2>&1; then
+            base="/orgs/${OWNER}/packages/container/${PACKAGE}"
+          elif gh api "/user/packages/container/${PACKAGE}/versions" >/dev/null 2>&1; then
+            base="/user/packages/container/${PACKAGE}"
+          else
+            echo "::warning::package ${PACKAGE} not found — skipping cleanup"
+            exit 0
+          fi
+          ids="$(gh api "${base}/versions" --paginate --jq '.[].id')"
+          if [ -z "$ids" ]; then
+            echo "no package versions — nothing to delete"
+            exit 0
+          fi
+          keep="$(printf '%s\n' "$ids" | head -n1)"
+          echo "keeping newest version id=${keep}"
+          for id in $ids; do
+            [ "$id" = "$keep" ] && continue
+            gh api -X DELETE "${base}/versions/$id" \
+              && echo "deleted stale version $id" \
+              || echo "::warning::failed to delete version $id"
+          done
 
       - name: Notify Telegram (build failure)
         if: ${{ failure() && env.NOTIFY_MODE != 'none' }}
