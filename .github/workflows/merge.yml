@@ -341,6 +341,9 @@ jobs:
           bash scripts/setup.sh -l -y -k "$KERNEL_VERSION" -s
           make -C src print-version
           kernel_used="${KERNEL_VERSION:-$(for d in /lib/modules/*/; do basename "$d"; done | sort -V | tail -n1)}"
+          mkdir -p /tmp/vds-merge/internal/config
+          printf '%s\n' "$kernel_used" > /tmp/vds-merge/internal/config/kernel
+          echo "tested kernel recorded: ${kernel_used}"
           ko="$(find "/lib/modules/${kernel_used}" -name 'amneziawg.ko*' | head -n1)"
           [ -n "$ko" ] || { echo "::error::amneziawg.ko not found for ${kernel_used}"; exit 1; }
           vermagic="$(modinfo -F vermagic "$ko")"
@@ -417,8 +420,8 @@ jobs:
           git add -A
           git commit -m "Merge upstream ${UPSTREAM_REF}" || true
           auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" push --force origin \
-            "HEAD:refs/heads/testing-${VERSION}"
+          branch="testing-${VERSION}-vds"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" push --force origin "HEAD:refs/heads/${branch}"
           SCRIPT
           docker exec -e GITHUB_TOKEN -e UPSTREAM_REF -e VERSION merge bash /work/ci-push.sh
 

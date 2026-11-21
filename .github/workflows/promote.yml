@@ -14,24 +14,63 @@ jobs:
   promote:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Fast-forward master to testing
+      - name: Rotate stable <- master <- testing
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          branch="testing-${VERSION}"
-          git fetch origin "$branch" master
-          # Перенос возможен только вперёд: testing должен быть потомком master.
+          branch="testing-${VERSION}-vds"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$branch" master "refs/tags/*:refs/tags/*" --force --prune
+
+          # 1. Что архивируем: версия и протестированное ядро лежат в самой
+          #    ветке stable до перезаписи, а не в input.
+          prev_version=""
+          prev_kernel=""
+          if git cat-file -e "origin/stable:internal/config/current" 2>/dev/null; then
+            prev_version="$(git show origin/stable:internal/config/current | tr -d '[:space:]')"
+            prev_version="${prev_version%-vds}"
+            if git cat-file -e "origin/stable:internal/config/kernel" 2>/dev/null; then
+              prev_kernel="$(git show origin/stable:internal/config/kernel | tr -d '[:space:]')"
+            fi
+          fi
+
+          # 2. Архивный тег старого stable: v${prev}-vds, ядро — в аннотации.
+          if [ -n "$prev_version" ]; then
+            archive_tag="v${prev_version}-vds"
+            if git rev-parse -q --verify "refs/tags/${archive_tag}" >/dev/null 2>&1; then
+              echo "::error::tag ${archive_tag} уже существует — повторный промоут той же ротации?"
+              exit 1
+            fi
+            msg="Stable: amneziawg ${prev_version}-vds"
+            if [ -n "$prev_kernel" ]; then
+              msg="${msg} — проверено на ядре ${prev_kernel}"
+            else
+              echo "::warning::в stable нет internal/config/kernel — ядро не попадёт в аннотацию тега"
+            fi
+            git tag -a "$archive_tag" origin/stable -m "$msg"
+            git push origin "refs/tags/${archive_tag}"
+            echo "архивирован stable: ${archive_tag} (ядро: ${prev_kernel:-неизвестно})"
+          else
+            echo "::warning::stable отсутствует — архивный тег пропущен (первый промоут)"
+          fi
+
+          # 3. Родство: testing обязан быть потомком master.
           if ! git merge-base --is-ancestor origin/master "origin/${branch}"; then
-            echo "::error::${branch} не является потомком master — ff-merge невозможен"
+            echo "::error::${branch} не является потомком master — ротация невозможна"
             exit 1
           fi
-          git switch master
-          git merge --ff-only "origin/${branch}"
-          git push origin HEAD:master
-          echo "master продвинут на ${branch} (версия ${VERSION}-vds)"
+
+          # 4. Ротация без окна отсутствия ветки: force-push вместо delete+push.
+          git push origin "origin/master:refs/heads/stable" --force
+          git push origin "origin/${branch}:refs/heads/master" --force
+          git push origin --delete "${branch}"
+
+          echo "Ротация завершена: stable=${prev_version:-<пусто>}, master=${VERSION}-vds"

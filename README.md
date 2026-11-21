@@ -8,7 +8,7 @@
 ## Содержание
 
 - [Установка](#установка)
-  - [CentOS быстрый старт](#CentOS) 
+  - [CentOS быстрый старт](#CentOS)
   - [Ubuntu](#ubuntu)
   - [Debian](#debian)
   - [Linux Mint](#linux-mint)

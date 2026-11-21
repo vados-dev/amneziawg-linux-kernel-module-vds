@@ -14,50 +14,41 @@ amneziawg-linux-kernel-module-vds (далее VDS) — это форк [amneziaw
 Код VDS патчей находится в изолированных файлах (internal/vds/).
 Версии и пр. конфигурационные файлы механизмов миграции находятся в изолированных файлах (internal/config/).
 Файлы из вышестоящего источника клонируются как есть во временный образ, после его обновления до нужной (тестируемой) версии ядра и подготовки
-внутри обработчика .github/workflows/merge.yml.
-Файлы из VDS ветки master копируются как есть во временный образ внутри обработчика .github/workflows/merge.yml в ту же папку вышестоящего источника.
+внутри обработчика `.github/workflows/merge.yml`.
+Файлы из VDS ветки `master` копируются как есть во временный образ внутри обработчика `.github/workflows/merge.yml` в ту же папку вышестоящего источника.
 Далее анализируем правки в источнике и различия с предыдущими правками VDS, оцениваем возможность слияния с необходимыми правками.
-Агент анализирует различия и предлагает решение о слиянии; запуск workflows выполняет владелец (правило 7 в 02-rules.md).
-Основное, это правки в src/compat/compat.h, без них DKMS отваливается с ошибкой на redeclare,
-причём KCFLAGS=-Wno-redundant-decls не дают ожидаемого результата (работают правки ISRHEL10/ISRHEL100/ISRHEL101
-и guards вида !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))).
-Остальное добавляется в соответствии с правилами в 02-rules.md.
+Основное, это правки в `src/compat/compat.h`, без них DKMS отваливается с подобными ошибками, как в: `.agents/logs/debug/compat-log.md`.
 
 ### Стратегия синхронизации с исходным кодом
-- Запуск .github/workflows/check-upstream.yml, где проверяем версию исходного кода и сравниваем с текущей версией VDS.
+- Запуск `.github/workflows/check-upstream.yml`, где проверяем версию исходного кода и сравниваем с текущей версией VDS.
 - Выбор версии источника по умолчанию: последний тег исходного репозитория, если не задана repo variable
   `DEFAULT_TAG`; либо значение `manual_tag`, указанное вручную в `workflow_dispatch` внутри `check-upstream.yml`.
   Приоритет: `manual_tag` при ручном запуске; при автозапусках — `DEFAULT_TAG`, если задана; иначе последний тег upstream.
-- Синхронизация с исходным кодом: запуск .github/workflows/merge.yml, где копируем исходный код во временный образ с
-  CentOS Stream 10. Там с помощью scripts/setup.sh обновляем версию ядра и устанавливаем всё необходимое
-  для тестирования слияния.
-- Тестирование слияния: в том же .github/workflows/merge.yml, где проверяем слияние с исходным кодом.
+- Синхронизация с исходным кодом: запуск `.github/workflows/merge.yml`, где копируем исходный код во временный образ с
+  CentOS Stream 10, который сделан с помощью `check-upstream.yml` (по умолчанию с последней версией ядра). Применяем необходимые патчи и устанавливаем с помощью scripts/setup.sh  amneziawg-dkms для тестирования слияния.
+- Тестирование слияния: в том же `.github/workflows/merge.yml`, где проверяем слияние с исходным кодом.
 - Если что-то не так, ничего не бросаем, а продолжаем размышлять глядя на ошибки в логах, только если агент совсем
   зашёл в тупик, присылаем сообщение в telegram боте на указанный адрес в защищённой переменной репозитория и завершаем
-  работу merge.yml.
-- Если слияние проходит успешно, запускаем .github/workflows/stable.yml, в котором создаём тег из предыдущей ветки
-  stable, вида v$(cat internal/config/current) с архивами в Assets, после чего удаляем ветку stable и создаём новую ветку
-  stable из ветки master.
-- Очищаем ветку master от папок src, debian, kernel-tree-scripts и прочих папок, которые относились к upstream и имеют значение при синхронизации.
-- Записываем новую текущую версию VDS в internal/config/current, записываем в internal/config/upstream ветку или тег из upstream и в internal/config/version
-  текущую версию upstream без суффикса, по пунктам 9 и 10 файла 02-rules.md. В current и src/version.h версия всегда оканчивается на "-vds".
-- Записываем в ветку master внутри .github/workflows/merge.yml из временного, успешно протестированного образа,
-  по пункту 11, файла 02-rules.md.
+  работу `merge.yml`.
+- Если слияние проходит успешно, пушим в ветку `testing-${VERSION}-vds` (VERSION: ${{ steps.prepare.outputs.version }}) и завершаем работу `merge.yml`.
+- Далее владелец репозитория должен протестировать слияние с исходным кодом, проверить работу модуля на стенде.
+- В случае успеха, вручную запускает `.github/workflows/promote.yml`, где сначала из ветки `stable` создаётся tag вида `stable-${VERSION}-vds`, старая ветка `stable` удаляется, 
+  а на её место записывается текущая ветка `master`, ветка `testing-${VERSION}-vds` переименовывается в `master`.
 
 ### Репозитории
-origin→ amnezia-vpn/amneziawg-linux-kernel-module (upstream)
-gh→ vados-dev/amneziawg-linux-kernel-module-vds
+origin→ `amnezia-vpn/amneziawg-linux-kernel-module` (upstream)
+gh→ `vados-dev/amneziawg-linux-kernel-module-vds`
 
-Активная upstream ветка: в internal/config/upstream.
-Активная upstream версия: в internal/config/version.
-Текущая версия VDS: в internal/config/current (записывается туда после успешного слияния и записи в ветку master).
+Активная upstream ветка: в `internal/config/upstream`.
+Активная upstream версия: в `internal/config/version`.
+Текущая версия VDS: в `internal/config/current` (записывается туда после успешного слияния и записи в ветку `master`).
 
 ### В настоящее время в VDS исправлено
-- В src/compat/compat.h, чтобы исправить ошибку при сборке и установке с помощью DKMS.
-- В src/Makefile добавлен print-version; версия берётся из src/version.h.
-- В src/version.h прописана новая версия модуля.
-- Исправлен src/dkms.conf, чтобы исправить ошибку при сборке и установке с помощью DKMS.
-- Добавлена папка docs для документации и подсказок при использовании VDS.
-- Исправлен README.md: добавлены пояснения и описание.
-- Добавлен INSTALL.md для установки VDS.
-- Добавлен install.txt как временный, для себя, с подсказками на виду.
+- В `src/compat/compat.h`, чтобы исправить ошибку при сборке и установке с помощью DKMS.
+- В `src/Makefile` добавлен `print-version`; версия берётся из `src/version.h`.
+- В `src/version.h` прописана новая версия модуля.
+- Исправлен `src/dkms.conf`, чтобы исправить ошибку при сборке и установке с помощью DKMS.
+- Добавлена папка `docs` для документации и подсказок при использовании VDS.
+- Исправлен `README.md`: добавлены пояснения и описание.
+- Добавлен `INSTALL.md` для установки VDS.
+- Добавлен `install.txt` как временный, для себя, с подсказками на виду.
