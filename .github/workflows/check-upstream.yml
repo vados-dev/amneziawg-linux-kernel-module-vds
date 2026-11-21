@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: Check Upstream
 
 on:
@@ -10,8 +11,13 @@ on:
         required: false
         default: ""
         type: string
+      kernel_version:
+        description: "Kernel version for the CI image; empty = latest from repos"
+        required: false
+        default: ""
+        type: string
       auto_merge:
-        description: "Start merge.yml when a new upstream tag is found"
+        description: "Run merge.yml in this same run when a new upstream tag is found"
         required: false
         default: false
         type: boolean
@@ -21,7 +27,7 @@ on:
         default: true
         type: boolean
       notify_mode:
-        description: "none: use env variable NOTIFY_MODE; changes: only new tags and failures; always: also report in-sync runs"
+        description: "none: disable; changes: only new tags and failures; always: also in-sync runs"
         required: false
         default: changes
         type: choice
@@ -33,17 +39,29 @@ on:
 permissions:
   contents: read
   issues: write
-  actions: write
+  packages: write
 
 env:
   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
+  CI_IMAGE_REGISTRY_REF: ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos10
   NOTIFY_MODE: ${{ inputs.notify_mode || 'changes' }}
-  AUTO_MERGE: ${{ inputs.auto_merge }}
-  DRY_RUN: ${{ inputs.dry_run }}
+
+# Два прогона не должны наперегонки собирать образ и мержить один тег:
+# ставим в очередь, не отменяем.
+concurrency:
+  group: check-upstream
+  cancel-in-progress: false
 
 jobs:
   check:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      tag_version: ${{ steps.resolve.outputs.tag_version }}
+      base: ${{ steps.compare.outputs.base }}
+      in_sync: ${{ steps.compare.outputs.in_sync }}
+      notify_mode: ${{ steps.notify.outputs.notify_mode }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,16 +69,11 @@ jobs:
         id: notify
         run: |
           set -euo pipefail
-          # none = отправку выключить полностью; changes/always — как есть.
           raw="${NOTIFY_MODE:-changes}"
           case "$raw" in
             none) mode=none ;;
             changes|always) mode="$raw" ;;
             *) echo "::warning::Unknown NOTIFY_MODE '${raw}' - falling back to changes"; mode=changes ;;
-          esac
-          case "$mode" in
-            none|changes|always) ;;
-            *) echo "::warning::Unknown NOTIFY_MODE '${mode}' - falling back to changes"; mode=changes ;;
           esac
           echo "NOTIFY_MODE=$mode" >> "$GITHUB_ENV"
           echo "notify_mode=$mode" >> "$GITHUB_OUTPUT"
@@ -94,15 +107,12 @@ jobs:
             tag="$(printf '%s\n' "$tags" | sort -V | tail -n1)"
           fi
 
-          # Accept both v-prefixed and bare tags; branches are left untouched.
           if [ -n "$tag" ] && ! printf '%s\n' "$tags" | grep -qx "$tag"; then
             if printf '%s\n' "$tags" | grep -qx "v${tag#v}"; then
               tag="v${tag#v}"
             fi
           fi
 
-          # Валидация: тег обязан существовать у апстрима. Ловит опечатки в
-          # manual_tag сразу, а не в глубине merge.yml.
           if [ -z "$tag" ] || ! printf '%s\n' "$tags" | grep -qx "$tag"; then
             echo "::error::tag '${tag:-<empty>}' not found in ${UPSTREAM_REPO}"
             exit 1
@@ -150,8 +160,9 @@ jobs:
           Upstream [${UPSTREAM_REPO}](https://github.com/${UPSTREAM_REPO}) released **${TAG}**; VDS base is **${BASE}**.
 
           ## VDS migration checklist
-          - [ ] Run \`merge.yml\` with \`upstream_ref=${TAG}\` and an empty \`kernel_version\` (latest kernel).
-          - [ ] Verify the ISRHEL10/ISRHEL100/ISRHEL101 guards in \`src/compat/compat.h\`.
+          - [ ] CI image is rebuilt automatically by this run (kernel: latest, copr amneziawg-dkms).
+          - [ ] \`merge.yml\` runs automatically with \`auto_merge=true\`; for a manual kernel use \`kernel_version\` input.
+          - [ ] Verify the compat guards in \`src/compat/compat.h\` (compat-probes.sh will fail loudly if anchors moved).
           - [ ] Review root-level upstream files reported by \`merge.yml\`.
           - [ ] Confirm \`internal/config/{current,version,upstream}\` and \`src/version.h\` after the merge.
           - [ ] \`stable.yml\` runs automatically from \`merge.yml\`; do not start it manually.
@@ -163,25 +174,7 @@ jobs:
           url="$(gh issue create --repo "$REPO" --title "$title" --body "$body")"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Start merge workflow
-        if: ${{ steps.compare.outputs.in_sync == 'false' && inputs.auto_merge }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.resolve.outputs.tag }}
-          REPO: ${{ github.repository }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-          gh workflow run merge.yml \
-            --repo "$REPO" \
-            --ref "$DEFAULT_BRANCH" \
-            -f upstream_ref="$TAG" \
-            -f kernel_version="" \
-            -f vds_branch="$DEFAULT_BRANCH" \
-            -f notify_mode="$NOTIFY_MODE" \
-            -F dry_run="$DRY_RUN"
-
-      - name: Notify Telegram
+      - name: Notify Telegram (check result)
         if: ${{ always() && env.NOTIFY_MODE != 'none' }}
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -198,7 +191,6 @@ jobs:
             exit 0
           fi
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          # One run produces exactly one message: update, in-sync or failure.
           if [ "$JOB_STATUS" != "success" ]; then
             text="check-upstream: ${JOB_STATUS}. Upstream: ${TAG:-unknown}. Logs: ${run_url}"
           elif [ "${IN_SYNC:-}" = "true" ]; then
@@ -208,13 +200,139 @@ jobs:
             fi
             text="check-upstream: upstream ${TAG} is in sync with VDS base ${BASE}. Logs: ${run_url}"
           else
-            if [ "${AUTO_MERGE:-false}" = "true" ]; then
-              merge_state="started (dry_run=${DRY_RUN:-true})"
+            if [ "${{ inputs.auto_merge }}" = "true" ]; then
+              merge_state="merge started in this run (dry_run=${{ inputs.dry_run }})"
             else
-              merge_state="not started (auto_merge=false)"
+              merge_state="merge not started (auto_merge=false)"
             fi
-            text="check-upstream: new upstream ${TAG} (VDS base ${BASE}). merge.yml: ${merge_state}. Issue: ${ISSUE_URL:-none}. Logs: ${run_url}"
+            text="check-upstream: new upstream ${TAG} (VDS base ${BASE}). CI image will be rebuilt. ${merge_state}. Issue: ${ISSUE_URL:-none}. Logs: ${run_url}"
           fi
           curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TG_CHAT_ID}" \
             --data-urlencode "text=${text}" > /dev/null
+
+  build-image:
+    needs: check
+    if: needs.check.outputs.in_sync == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      image_ref: ${{ steps.meta.outputs.image_ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Probe kernel and copr module versions
+        id: probe
+        env:
+          KERNEL_IN: ${{ inputs.kernel_version }}
+        run: |
+          set -euo pipefail
+          # Та же логика источников, что и в Dockerfile ниже
+          # (quay.io/centos:stream10 + crb + copr tigro/amneziawg).
+          out="$(docker run --rm quay.io/centos/centos:stream10 bash -c '
+            set -euo pipefail
+            dnf -y install dnf-plugins-core -q >/dev/null
+            dnf config-manager --set-enabled crb >/dev/null 2>&1 || true
+            dnf copr enable -y tigro/amneziawg >/dev/null 2>&1
+            dnf makecache -q >/dev/null 2>&1
+            k="$(dnf repoquery -q --latest-limit=1 kernel-core --qf "%{version}-%{release}.%{arch}" | tail -n1)"
+            a="$(dnf repoquery -q --latest-limit=1 amneziawg-dkms --qf "%{version}" | tail -n1)"
+            [ -n "$k" ] && [ -n "$a" ] || { echo "probe failed: k=$k a=$a" >&2; exit 1; }
+            echo "$k $a"
+          ')"
+          kernel="$(awk '{print $1}' <<<"$out")"
+          awg="$(awk '{print $2}' <<<"$out")"
+          if [ -n "$KERNEL_IN" ]; then
+            kernel="$KERNEL_IN"
+            echo "kernel override from input: $kernel"
+          fi
+          echo "kernel=$kernel" >> "$GITHUB_OUTPUT"
+          echo "awg=$awg" >> "$GITHUB_OUTPUT"
+          echo "Probed: kernel=$kernel amneziawg-dkms=$awg"
+
+      - name: Generate Dockerfile
+        run: |
+          set -euo pipefail
+          cat > /tmp/ci-image.Dockerfile <<'DOCKERFILE'
+          FROM quay.io/centos/centos:stream10
+
+          ARG KERNEL_VERSION
+          ARG AWG_VERSION
+
+          RUN dnf -y install dnf-plugins-core && \
+              dnf config-manager --set-enabled crb >/dev/null 2>&1 || true && \
+              dnf copr enable -y tigro/amneziawg && \
+              dnf -y install \
+                "kernel-${KERNEL_VERSION}" "kernel-core-${KERNEL_VERSION}" \
+                "kernel-devel-${KERNEL_VERSION}" "kernel-devel-matched-${KERNEL_VERSION}" \
+                "kernel-headers-${KERNEL_VERSION}" \
+                gcc make git tar gzip which curl libmnl-devel pkgconf dkms \
+                "amneziawg-dkms-${AWG_VERSION}" && \
+              dnf clean all
+
+          LABEL org.opencontainers.image.version.kernel="${KERNEL_VERSION}" \
+                org.opencontainers.image.version.amneziawg="${AWG_VERSION}" \
+                org.opencontainers.image.source="https://github.com/amnezia-vpn/amneziawg-linux-kernel-module"
+
+          # Ядро по умолчанию для setup.sh: свежайшее из установленных.
+          RUN ln -sfn "/lib/modules/$(ls -1 /lib/modules | sort -V | tail -n1)" /lib/modules/current || true
+          DOCKERFILE
+          echo "Dockerfile generated"
+          cat /tmp/ci-image.Dockerfile
+
+      - name: Build and push CI image
+        id: meta
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF: ${{ env.CI_IMAGE_REGISTRY_REF }}
+          KERNEL: ${{ steps.probe.outputs.kernel }}
+          AWG: ${{ steps.probe.outputs.awg }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          docker build \
+            --build-arg KERNEL_VERSION="${KERNEL}" \
+            --build-arg AWG_VERSION="${AWG}" \
+            -f /tmp/ci-image.Dockerfile \
+            -t "${REF}:current" \
+            /tmp
+          docker push "${REF}:current"
+          echo "image_ref=${REF}:current" >> "$GITHUB_OUTPUT"
+          echo "Pushed ${REF}:current (kernel=${KERNEL}, amneziawg-dkms=${AWG})"
+
+      - name: Delete stale image versions
+        if: ${{ always() }}
+        uses: actions/delete-package-versions@v5
+        continue-on-error: true
+        with:
+          package-name: vados-dev/${{ github.event.repository.name }}/centos10
+          package-type: container
+          min-versions-to-keep: 1
+
+
+      - name: Notify Telegram (build failure)
+        if: ${{ failure() && env.NOTIFY_MODE != 'none' }}
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TG_TOKEN:-}" ] || [ -z "${TG_CHAT_ID:-}" ]; then exit 0; fi
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          text="check-upstream: CI image build failed. Logs: ${run_url}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT_ID}" \
+            --data-urlencode "text=${text}" > /dev/null
+
+  merge:
+    needs: [check, build-image]
+    if: needs.check.outputs.in_sync == 'false' && inputs.auto_merge
+    uses: ./.github/workflows/merge.yml
+    with:
+      upstream_ref: ${{ needs.check.outputs.tag }}
+      kernel_version: ${{ inputs.kernel_version }}
+      vds_branch: ${{ github.event.repository.default_branch }}
+      dry_run: ${{ inputs.dry_run }}
+      notify_mode: ${{ needs.check.outputs.notify_mode }}
+      ci_image_ref: ${{ needs.build-image.outputs.image_ref }}
+    secrets: inherit

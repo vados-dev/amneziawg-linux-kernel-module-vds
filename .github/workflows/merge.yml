@@ -5,17 +5,12 @@ on:
   workflow_call:
     inputs:
       upstream_ref:
-        description: "Upstream tag or branch"
+        description: "Upstream tag or branch; empty = internal/config/upstream"
         required: false
-        default: "master"
-        type: string
-      dockerfile:
-        description: "Dockerfile in location docker/ci-images/"
-        required: true
-        default: "Dockerfile.new"
+        default: ""
         type: string
       kernel_version:
-        description: "Target kernel version; empty means the latest available"
+        description: "Target kernel version; empty means the latest available in the CI image"
         required: false
         default: ""
         type: string
@@ -34,25 +29,20 @@ on:
         required: false
         default: ""
         type: string
-      ci_image_source:
-        description: "registry = pinned GHCR image; build = build tmp-* image in this run (no push)"
+      ci_image_ref:
+        description: "CI image ref; empty = CI_IMAGE_REGISTRY_REF:current"
         required: false
-        default: "build"
+        default: ""
         type: string
   workflow_dispatch:
     inputs:
       upstream_ref:
-        description: "Upstream tag or branch"
+        description: "Upstream tag or branch; empty = internal/config/upstream"
         required: false
-        default: "master"
-        type: string
-      dockerfile:
-        description: "Dockerfile in location docker/ci-images/"
-        required: true
-        default: "Dockerfile.new"
+        default: ""
         type: string
       kernel_version:
-        description: "Target kernel version (empty = latest, or e.q. 6.12.0-281.el10.x86_64)"
+        description: "Target kernel version (empty = latest in image, or e.g. 6.12.0-281.el10.x86_64)"
         required: false
         default: ""
         type: string
@@ -75,14 +65,11 @@ on:
           - none
           - changes
           - always
-      ci_image_source:
-        description: "registry = pinned GHCR image; build = build tmp-* image in this run (no push)"
+      ci_image_ref:
+        description: "CI image ref; empty = CI_IMAGE_REGISTRY_REF:current"
         required: false
-        default: build
-        type: choice
-        options:
-          - registry
-          - build
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -92,34 +79,13 @@ permissions:
 env:
   UPSTREAM_REPO: amnezia-vpn/amneziawg-linux-kernel-module
   NOTIFY_MODE: ${{ inputs.notify_mode || 'changes' }}
-  CI_IMAGE_REGISTRY_REF: ghcr.io/vados-dev/build-images/amneziawg-kernel-centos10:lts
+  # База без тега: по умолчанию берём :current, который собирает check-upstream.yml.
+  CI_IMAGE_REGISTRY_REF: ghcr.io/vados-dev/amneziawg-linux-kernel-module-vds/centos10
 
 jobs:
-  build_ci_image:
-    if: ${{ inputs.ci_image_source == 'build' }}
-    uses: ./.github/workflows/build-ci-image.yml
-    with:
-      operation: build
-      dockerfile: ${{ inputs.dockerfile }}
-      base_image: quay.io/centos/centos:stream10
-      build_platforms: linux/amd64
-      # tmp-* гарантирует отсутствие пуша; run_id в имени делает concurrency-группу
-      # уникальной, чтобы параллельные вызовы не вставали в очередь друг за другом.
-      image_name: tmp-${{ github.run_id }}
-      width_kernel: ${{ inputs.kernel_version }}
-      width_dkms: false
-      width_base_packages: "gcc make git tar gzip which curl wget libmnl-devel pkgconf python3 python3-pip dkms"
-      push: false
-    secrets: inherit
-
   merge:
-    needs: [build_ci_image]
-    # build_ci_image пропускается в режиме registry — это не ошибка.
-    if: ${{ !cancelled() && (needs.build_ci_image.result == 'success' || needs.build_ci_image.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    env:
-      CI_IMAGE_SOURCE: ${{ inputs.ci_image_source }}
     outputs:
       upstream_ref: ${{ steps.resolve.outputs.upstream_ref }}
       kernel_version: ${{ steps.build.outputs.kernel_version }}
@@ -155,13 +121,14 @@ jobs:
           IN_KERNEL_VERSION: ${{ inputs.kernel_version }}
           IN_VDS_BRANCH: ${{ inputs.vds_branch }}
           IN_DRY_RUN: ${{ inputs.dry_run }}
+          IN_CI_IMAGE_REF: ${{ inputs.ci_image_ref }}
         run: |
           set -euo pipefail
           # Пустой upstream_ref = «взять из internal/config/upstream» (его пишет check-upstream.yml).
-          # Дефолт 'master' сюда больше не вписываем — он перекрыл бы запрошенный тег.
           upstream_ref="${IN_UPSTREAM_REF:-}"
           kernel_version="${IN_KERNEL_VERSION:-}"
           vds_branch="${IN_VDS_BRANCH:-master}"
+          ci_image_ref="${IN_CI_IMAGE_REF:-${CI_IMAGE_REGISTRY_REF}:current}"
           case "${IN_DRY_RUN:-true}" in
             false|False|FALSE|0) dry_run=false ;;
             *) dry_run=true ;;
@@ -170,6 +137,7 @@ jobs:
             echo "UPSTREAM_REF=$upstream_ref"
             echo "KERNEL_VERSION=$kernel_version"
             echo "VDS_BRANCH=$vds_branch"
+            echo "CI_IMAGE_REF=$ci_image_ref"
             echo "DRY_RUN=$dry_run"
           } >> "$GITHUB_ENV"
           {
@@ -178,29 +146,16 @@ jobs:
             echo "vds_branch=$vds_branch"
             echo "dry_run=$dry_run"
           } >> "$GITHUB_OUTPUT"
-          echo "upstream_ref=${upstream_ref:-<from config>} kernel_version=${kernel_version:-latest} vds_branch=$vds_branch dry_run=$dry_run"
-
-      - name: Download local CI image
-        if: ${{ inputs.ci_image_source == 'build' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: ci-image-tmp
-          path: /tmp
+          echo "upstream_ref=${upstream_ref:-<from config>} kernel_version=${kernel_version:-latest} vds_branch=$vds_branch dry_run=$dry_run image=$ci_image_ref"
 
       - name: Acquire CI image
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if [ "${CI_IMAGE_SOURCE}" = "build" ]; then
-            img="$(docker load --input /tmp/ci-image.tar | sed -n 's/^Loaded image: //p' | head -n1)"
-            [ -n "${img}" ] || { echo "::error::docker load returned no image"; exit 1; }
-          else
-            printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
-            img="${CI_IMAGE_REGISTRY_REF}"
-          fi
-          docker tag "${img}" ci-image:work
-          docker rmi "${img}" >/dev/null 2>&1 || true
+          printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          docker pull "${CI_IMAGE_REF}"
+          docker tag "${CI_IMAGE_REF}" ci-image:work
 
       - name: Start merge container
         run: |
@@ -222,7 +177,7 @@ jobs:
               echo "::error::CI image is missing tools:${missing}"
               exit 1
             fi
-            echo "CI image tooling verified: git make curl tar gzip base64 awk sed"
+            echo "CI image tooling verified"
           '
 
       - name: Checkout VDS
