@@ -54,7 +54,7 @@ REF_EXPLICIT=0
 # Влияет только когда скрипт запущен вне репозитория.
 REF="${REF:-master}"
 
-usage() { sed -n '2,42p' "${SELF}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,19p' "${SELF}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
