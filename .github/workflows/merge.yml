@@ -284,27 +284,31 @@ jobs:
           [ -d /tmp/vds-merge/internal/vds/src ] || { echo "::error::internal/vds/src not found"; exit 1; }
           cp -a /tmp/vds-merge/internal/vds/src/. /tmp/vds-merge/src/
 
-          # Оверлей правок compat (зонды): применяется поверх свежего апстрима.
-          # Патч не лёг → апстрим менял compat.h → останавливаемся, не собирая вслепую.
-          patch_file="/tmp/vds-merge/internal/vds/patches/compat-probes.patch"
-          if [ -f "$patch_file" ]; then
-            patch -p1 --fuzz=0 -d /tmp/vds-merge < "$patch_file" \
-              || { echo "::error::compat-probes.patch failed — апстрим менял compat.h, патч нужно перегенерировать"; exit 1; }
-          else
-            echo "::warning::compat-probes.patch отсутствует — зонды применены не будут"
-          fi
+          # Зонды compat: скрипт правит шим-блоки по уникальным якорям.
+          # Отсутствие якоря = громкий отказ (апстрим менял compat.h).
+          bash /tmp/vds-merge/internal/vds/scripts/compat-probes.sh /tmp/vds-merge/src/compat/compat.h
 
           die() { echo "::error::$1"; exit 1; }
 
-          # Конфиг VDS (записан check-upstream.yml): upstream — ref (тег или ветка),
-          # version — предыдущая апстримная версия, current — текущая сборка -vds.
-          prev_version="$(tr -d '[:space:]' < /tmp/vds-merge/internal/config/version || true)"
-          cfg_upstream="$(tr -d '[:space:]' < /tmp/vds-merge/internal/config/upstream || true)"
+          # Конфиг VDS. Санитизация: старая схема писала суффикс -vds во все три
+          # файла — отрезаем его везде, чистое значение пишем ниже.
+          read_cfg() { tr -d '[:space:]' < "$1" 2>/dev/null || true; }
+          cfg_dir=/tmp/vds-merge/internal/config
+          prev_version="$(read_cfg "$cfg_dir/version")"; prev_version="${prev_version%-vds}"
+          cfg_upstream="$(read_cfg "$cfg_dir/upstream")"; cfg_upstream="${cfg_upstream%-vds}"
+
+          # Целевой ref: явный вход > конфиг. Тег или ветка — решает сам апстрим.
           target="${UPSTREAM_REF:-$cfg_upstream}"
           [ -n "$target" ] || die "upstream ref unresolved: ни входа, ни internal/config/upstream"
 
-          # Тег или ветка? Теги ищем по refs/tags; ветки — остальное.
-          if git -C /tmp/upstream rev-parse -q --verify "refs/tags/${target}^{commit}" >/dev/null; then
+          # Ref обязан существовать. Мусор от старой схемы (v3.1...-vds) не резолвится —
+          # тогда предупреждение и откат на master, а не падение.
+          if ! git -C /tmp/upstream rev-parse -q --verify "${target}^{commit}" >/dev/null 2>&1; then
+            echo "::warning::configured upstream ref '${target}' not found in upstream; falling back to master"
+            target=master
+          fi
+
+          if git -C /tmp/upstream rev-parse -q --verify "refs/tags/${target}^{commit}" >/dev/null 2>&1; then
             is_tag=1
             echo "Upstream ref is a tag: $target"
           else
@@ -312,8 +316,8 @@ jobs:
             echo "Upstream ref is a branch: $target"
           fi
 
-          # Версия: с тега — из version.h на ЭТОМ теге (имя тега парсить нельзя:
-          # формат не гарантирован); с ветки — из рабочей копии.
+          # Версия: с тега — из version.h на этом теге; с ветки — из рабочей копии.
+          # Guard-обёртка (#ifndef) в файле игнорируется: берём только строку #define.
           if [ "$is_tag" = "1" ]; then
             version="$(git -C /tmp/upstream show "${target}:src/version.h" \
               | grep -m1 '#define[[:space:]]*WIREGUARD_VERSION' | tr -cd '0-9.')"
@@ -333,20 +337,20 @@ jobs:
             exit 1
           fi
 
-          # Разложить по конфигу: upstream = целевой ref, version = апстримная версия,
-          # current = сборочная версия форка.
-          printf '%s\n' "$target" > /tmp/vds-merge/internal/config/upstream
-          printf '%s\n' "$version" > /tmp/vds-merge/internal/config/version
-          printf '%s-vds\n' "$version" > /tmp/vds-merge/internal/config/current
+          # Разложить по конфигу: upstream = целевой ref (БЕЗ -vds), version = чистая
+          # апстримная версия, current = сборочная версия форка.
+          printf '%s\n' "$target" > "$cfg_dir/upstream"
+          printf '%s\n' "$version" > "$cfg_dir/version"
+          printf '%s-vds\n' "$version" > "$cfg_dir/current"
           sed -i "s/^#define WIREGUARD_VERSION .*/#define WIREGUARD_VERSION \"${version}-vds\"/" \
             /tmp/vds-merge/src/version.h
           cp /tmp/vds-merge/src/version.h /tmp/vds-merge/internal/vds/src/version.h
 
-          # Root-level upstream files are owned by VDS: report only what changed upstream
-          # between the previous upstream tag and the target ref (rule 11).
+          # Root-file diff: апстримные корневые файлы принадлежат VDS (rule 11),
+          # сравниваем предыдущий апстримный тег с целью.
           base_ref=""
           for candidate in "v${prev_version}" "${prev_version}"; do
-            if git -C /tmp/upstream rev-parse -q --verify "refs/tags/${candidate}^{commit}" >/dev/null; then
+            if git -C /tmp/upstream rev-parse -q --verify "refs/tags/${candidate}^{commit}" >/dev/null 2>&1; then
               base_ref="$candidate"
               break
             fi
@@ -360,12 +364,14 @@ jobs:
           fi
 
           printf '%s\n' "$changes" > /tmp/root_changes.txt
-          echo "root_changes=$changes" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$version" > /tmp/prepare.env
           echo "Merged tree prepared, version ${version}-vds, ref $target, root changes: ${changes:-none}"
           SCRIPT
           docker exec -e UPSTREAM_REF merge bash /work/ci-prepare.sh
-          cat "$GITHUB_WORKSPACE/out-prepare.env" 2>/dev/null || true
+          changes="$(docker exec merge cat /tmp/root_changes.txt)"
+          version="$(docker exec merge cat /tmp/prepare.env)"
+          echo "root_changes=$changes" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build and test the merged tree
         id: build
