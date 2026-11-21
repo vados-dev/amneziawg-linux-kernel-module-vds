@@ -406,6 +406,7 @@ jobs:
         if: ${{ steps.resolve.outputs.dry_run == 'false' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.prepare.outputs.version }}
         run: |
           set -euo pipefail
           cat > "$GITHUB_WORKSPACE/ci-push.sh" <<'SCRIPT'
@@ -416,25 +417,14 @@ jobs:
           git add -A
           git commit -m "Merge upstream ${UPSTREAM_REF}" || true
           auth="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          git -c http.extraheader="AUTHORIZATION: basic ${auth}" push origin "HEAD:${VDS_BRANCH}"
+          git -c http.extraheader="AUTHORIZATION: basic ${auth}" push --force origin \
+            "HEAD:refs/heads/testing-${VERSION}"
           SCRIPT
-          docker exec -e GITHUB_TOKEN -e UPSTREAM_REF -e VDS_BRANCH merge bash /work/ci-push.sh
+          docker exec -e GITHUB_TOKEN -e UPSTREAM_REF -e VERSION merge bash /work/ci-push.sh
 
       - name: Stop merge container
         if: ${{ always() }}
         run: docker rm -f merge || true
-
-  stable:
-    needs: merge
-    if: ${{ needs.merge.result == 'success' && needs.merge.outputs.dry_run == 'false' }}
-    uses: ./.github/workflows/stable.yml
-    with:
-      version: ${{ needs.merge.outputs.version }}
-      vds_branch: ${{ needs.merge.outputs.vds_branch }}
-      kernel_version: ${{ needs.merge.outputs.kernel_version }}
-      dry_run: false
-      notify_mode: ${{ needs.merge.outputs.notify_mode || 'changes' }}
-    secrets: inherit
 
   notify:
     needs: merge
