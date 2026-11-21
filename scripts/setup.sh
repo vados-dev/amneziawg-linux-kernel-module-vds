@@ -7,7 +7,9 @@
 #   (без флагов)   зависимости + модуль из готового пакета (копр/репозиторий)
 #   -l             сборка из локального дерева (src/ рядом с этим скриптом)
 #   -d             только зависимости
-#   -k <ver>       целевое ядро, напр. 6.12.0-281.el10.x86_64 (по умолчанию запущенное)
+#   -k <ver>       целевое ядро, напр. 6.12.0-281.el10.x86_64
+#                  (пустое значение или без флага = самое свежее из /lib/modules,
+#                   в CI это обязательно: uname -r показывает ядро хоста, не контейнера)
 #   -y             не спрашивать подтверждений
 #   -s             тихая установка: не трогать сеть и сервисы (безопасно для CI)
 #   --prebuilt     принудительно готовый пакет, даже если рядом есть дерево
@@ -15,10 +17,10 @@
 set -euo pipefail
 
 LOCAL_BUILD=0; DEPS_ONLY=0; ASSUME_YES=0; QUIET=0; FORCE_PREBUILT=0
-KERNEL="$(uname -r)"
+KERNEL=""
 MODULE_NAME="amneziawg"
 
-usage() { sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -26,7 +28,10 @@ while [ $# -gt 0 ]; do
     -d) DEPS_ONLY=1 ;;
     -y) ASSUME_YES=1 ;;
     -s) QUIET=1 ;;
-    -k) KERNEL="${2:?-k требует версию ядра}"; shift ;;
+    -k)
+      [ $# -ge 2 ] || { echo "[ERROR] [setup.sh] - флаг -k требует значение" >&2; usage; exit 2; }
+      KERNEL="$2"
+      shift ;;
     --prebuilt) FORCE_PREBUILT=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "[ERROR] [setup.sh] - неизвестный аргумент: $1" >&2; usage; exit 2 ;;
@@ -36,6 +41,21 @@ done
 
 log() { echo "[INFO] [setup.sh] - $*"; }
 die() { echo "[ERROR] [setup.sh] - $*" >&2; exit 1; }
+
+# Резолв целевого ядра. Пустое -k = самое свежее установленное ядро.
+# Источник истины — /lib/modules, а не uname -r: внутри контейнера uname
+# показывает ядро хоста-раннера (Ubuntu), а не ядро, установленное в образе.
+if [ -z "$KERNEL" ]; then
+  if [ -d /lib/modules ] && ls -1 /lib/modules | grep -q .; then
+    KERNEL="$(ls -1 /lib/modules | sort -V | tail -n1)"
+  else
+    KERNEL="$(uname -r)"
+  fi
+fi
+if [ ! -d "/lib/modules/$KERNEL" ]; then
+  die "Ядро $KERNEL не установлено (/lib/modules/$KERNEL отсутствует); доступно: $(ls -1 /lib/modules 2>/dev/null | tr '\n' ' ')"
+fi
+log "Целевое ядро: $KERNEL"
 
 confirm() {
   [ "$ASSUME_YES" = "1" ] && return 0
