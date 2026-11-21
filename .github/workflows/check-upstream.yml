@@ -348,7 +348,7 @@ jobs:
             gh api -X DELETE "${base}/versions/$id" \
               && echo "deleted stale version $id" \
               || echo "::warning::failed to delete version $id"
-          fi
+          done
 
       - name: Notify Telegram (build failure)
         if: ${{ failure() && env.NOTIFY_MODE != 'none' }}
