@@ -18,13 +18,6 @@
 #define ISRHEL8
 #elif RHEL_MAJOR == 9
 #define ISRHEL9
-#elif RHEL_MAJOR == 10
-#define ISRHEL10
-#if RHEL_MINOR == 0
-#define ISRHEL100
-#elif RHEL_MINOR == 1
-#define ISRHEL101
-#endif
 #endif
 #endif
 #ifdef UTS_UBUNTU_RELEASE_ABI
@@ -1303,11 +1296,11 @@ static inline int timer_delete(struct timer_list *timer)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0) && !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0) && !defined(AWG_HAVE_TIMER_CONTAINER_OF)
 #define timer_container_of from_timer
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0) && !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0) && !defined(AWG_HAVE_SOCKADDR_INET)
 #include <linux/in6.h>
 struct sockaddr_inet {
 	unsigned short	sa_family;
@@ -1316,7 +1309,7 @@ struct sockaddr_inet {
 };
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0) && !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0) && !defined(AWG_HAVE_NETIF_THREADED_ENABLE)
 #include <linux/netdevice.h>
 static inline void netif_threaded_enable(struct net_device *dev) { }
 #endif
@@ -1330,7 +1323,7 @@ static inline void netif_threaded_enable(struct net_device *dev) { }
 #define COMPAT_CANNOT_USE_PCPU_STAT_TYPE
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0) && !(defined(ISRHEL10) && !(defined(ISRHEL100) || defined(ISRHEL101)))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 15, 0) && !defined(AWG_HAVE_RTNL_NEWLINK_LINK_NET)
 #define COMPAT_CANNOT_USE_RTNL_NEWLINK_PARAMS
 struct rtnl_newlink_params {
 	struct net *src_net;
@@ -1406,24 +1399,12 @@ static inline char *nla_strdup(const struct nlattr *nla, gfp_t flags)
 #define COMPAT_CANNOT_USE_NETLINK_MCGRPS
 #endif
 
-/* Kernel 6.19+ renamed blake2s_state to blake2s_ctx and changed blake2s() arg order.
- * On kernels < 5.10 with zinc crypto (COMPAT_INIT_CRYPTO / ISUBUNTU2004), we must
- * use zinc's own blake2s header to avoid duplicate symbol conflicts with the
- * system <crypto/blake2s.h> whose names are already macro-remapped to zinc_*.
- */
+/* Kernel 6.19+ renamed blake2s_state to blake2s_ctx and changed blake2s() arg order */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 19, 0)
-    #if defined(ISUBUNTU2004) || defined(COMPAT_INIT_CRYPTO)
-        #include "../crypto/include/zinc/blake2s.h"
-        #ifndef _CRYPTO_BLAKE2S_H
-            #define _CRYPTO_BLAKE2S_H
-        #endif
-    #else
-        #include <crypto/blake2s.h>
-    #endif
-
-    #define blake2s_ctx blake2s_state
-    #define blake2s(key, keylen, in, inlen, out, outlen) \
-            (blake2s)((u8 *)(out), (const u8 *)(in), (const u8 *)(key), (size_t)(outlen), (size_t)(inlen), (size_t)(keylen))
+#include <crypto/blake2s.h>
+#define blake2s_ctx blake2s_state
+#define blake2s(key, keylen, in, inlen, out, outlen) \
+	blake2s(out, in, key, outlen, inlen, keylen)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(7, 1, 0) && !IS_ENABLED(CONFIG_IPV6)
@@ -1434,7 +1415,7 @@ static inline struct dst_entry *ip6_dst_lookup_flow(struct net *net, const struc
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 16, 0) && !defined(AWG_HAVE_CHACHA_STATE)
 #include <crypto/chacha.h>
 #define CHACHA_KEY_WORDS	8
 #ifndef CHACHA_STATE_WORDS
@@ -1460,15 +1441,18 @@ static inline void __compat_chacha20_crypt(struct chacha_state *state,
 	(chacha20_crypt)(state->x, dst, src, bytes);
 }
 #define chacha20_crypt(s, d, src, b) __compat_chacha20_crypt((s),(d),(src),(b))
+
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(7, 1, 5)
 #include <net/udp_tunnel.h>
+#if !(defined(UTS_UBUNTU_RELEASE_ABI) && LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0) && UTS_UBUNTU_RELEASE_ABI >= 38)
 #define setup_udp_tunnel_sock(net, sk, sock_cfg) setup_udp_tunnel_sock(net, sk->sk_socket, sock_cfg)
+#endif
 #define udp_tunnel_sock_release(sk) udp_tunnel_sock_release(sk->sk_socket)
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0) && !defined(AWG_HAVE_WQ_PERCPU)
 #define WQ_PERCPU 0
 #endif
 
