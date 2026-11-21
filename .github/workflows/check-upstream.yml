@@ -63,7 +63,7 @@ jobs:
       in_sync: ${{ steps.compare.outputs.in_sync }}
       notify_mode: ${{ steps.notify.outputs.notify_mode }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Resolve notification mode
         id: notify
@@ -219,7 +219,7 @@ jobs:
     outputs:
       image_ref: ${{ steps.meta.outputs.image_ref }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Probe kernel and copr module versions
         id: probe

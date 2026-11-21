@@ -131,7 +131,7 @@ build_local() {
   src_dir="$(dirname "$script_dir")/src"
   [ -f "$src_dir/Makefile" ] || die "-l требует локального дерева: не найден $src_dir/Makefile"
 
-  ver="$(make -C "$src_dir" print-version 2>/dev/null)" || die "Не удалось прочитать версию из src/version.h"
+  ver="$(make -s -C "$src_dir" print-version 2>/dev/null | tail -n1)"
   [ -n "$ver" ] || die "WIREGUARD_VERSION не определён в src/version.h"
   log "Сборка из локального дерева: версия $ver, ядро $KERNEL"
 
