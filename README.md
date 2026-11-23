@@ -3,9 +3,14 @@
 
 <div align="center">
 
-  [Русский](README.md) | [English](README_en.md)
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/Русский-151b23?style=flat-square&logo=readme&logoColor=white&labelColor=0000FF" alt="Русский README" /></a>
+  <a href="README_en.md"><img src="https://img.shields.io/badge/English-151b23?style=flat-square&logo=readme&logoColor=gray&labelColor=151b23" alt="English README" /></a>
+</p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen?style=flat-square&labelColor=grey)](https://opensource.org/licenses/MIT)
+<br>
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen?style=flat-square&labelColor=151b23&logo=mit)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/CentOS%209%2B-8A2BE2?style=flat-square&logo=centos&logoColor=white&labelColor=rgb(0%200%200%20%2F%200%25))](https://www.centos.org/)
 [![Platform](https://img.shields.io/badge/Ubuntu%2024%20%2F%20Debian%2012%2B-E95420?style=flat-square&logo=ubuntu&logoColor=white&labelColor=rgb(0%200%200%20%2F%200%25))](https://ubuntu.com/)
 [![AmneziaWG](https://img.shields.io/badge/AmneziaWG%203.1-red?style=flat-square&logo=wireguard&logoColor=red&labelColor=black)](#)
