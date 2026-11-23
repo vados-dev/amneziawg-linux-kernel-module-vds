@@ -1,4 +1,5 @@
 # Модуль ядра AmneziaWG VDS
+[![GitHub forks](https://img.shields.io/github/forks/amnezia-vpn/amneziawg-linux-kernel-module?style=for-the-badge&logo=github&label=Fork%3A%20amnezia-vpn&labelColor=rgb(0%200%200%20%2F%200%25)&color=151b23)](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module)
 
 <div align="center">
 
@@ -10,9 +11,7 @@
 [![AmneziaWG](https://img.shields.io/badge/AmneziaWG%203.1-red?style=flat-square&logo=wireguard&logoColor=red&labelColor=black)](#)
 [![Release](https://img.shields.io/github/v/release/vados-dev/amneziawg-linux-kernel-module-vds?style=flat-square&logo=github&labelColor=rgb(0%200%200%20%2F%200%25))](https://github.com/vados-dev/amneziawg-linux-kernel-module-vds/releases)
 
-Форк [amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module).
-![Release](https://img.shields.io/github/v/tag/vados-dev/amneziawg-linux-kernel-module-vds?style=flat-square&label=%20&logo=github&labelColor=rgb(0%200%200%20%2F%200%25)&color=rgb(0%200%200%20%2F%200%25))
-
+[![Release](https://img.shields.io/github/v/tag/vados-dev/amneziawg-linux-kernel-module-vds?style=flat-square&label=%20&logo=github&labelColor=rgb(0%200%200%20%2F%200%25)&color=rgb(0%200%200%20%2F%200%25))](https://github.com/vados-dev/amneziawg-linux-kernel-module-vds/releases)
 
 </div>
 
