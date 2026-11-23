@@ -1,9 +1,22 @@
-# Модуль ядра AmneziaWG (VDS)
+# Модуль ядра AmneziaWG VDS
 
-[Русский](README.md) | [English](README_en.md)
+<div align="center">
+
+  [Русский](README.md) | [English](README_en.md)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen?style=flat-square&labelColor=grey)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/CentOS%209%2B-8A2BE2?style=flat-square&logo=centos&logoColor=white&labelColor=rgb(0%200%200%20%2F%200%25))](https://www.centos.org/)
+[![Platform](https://img.shields.io/badge/Ubuntu%2024%20%2F%20Debian%2012%2B-E95420?style=flat-square&logo=ubuntu&logoColor=white&labelColor=rgb(0%200%200%20%2F%200%25))](https://ubuntu.com/)
+[![AmneziaWG](https://img.shields.io/badge/AmneziaWG%203.1-red?style=flat-square&logo=wireguard&logoColor=red&labelColor=black)](#)
+[![Release](https://img.shields.io/github/v/release/vados-dev/amneziawg-linux-kernel-module-vds?style=flat-square&logo=github&labelColor=rgb(0%200%200%20%2F%200%25))](https://github.com/vados-dev/amneziawg-linux-kernel-module-vds/releases)
 
 Форк [amneziawg-linux-kernel-module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module).
-Текущая версия VDS: `3.1.20260812-vds`.
+![Release](https://img.shields.io/github/v/tag/vados-dev/amneziawg-linux-kernel-module-vds?style=flat-square&label=%20&logo=github&labelColor=rgb(0%200%200%20%2F%200%25)&color=rgb(0%200%200%20%2F%200%25))
+
+
+</div>
+
+---
 
 ## Содержание
 
@@ -248,3 +261,13 @@ ln -s /path/to/your/kernel/sources /usr/src/amneziawg-3.1.20260812-vds/kernel
 ## Лицензия
 
 Проект распространяется по лицензии [GPLv2](COPYING).
+
+---
+
+<div align="center">
+
+**Сделано ❤️ для себя**
+
+[⬆ Наверх](#модуль-ядра-amneziawg-vds)
+
+</div>
