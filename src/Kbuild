@@ -8,6 +8,21 @@ ccflags-$(CONFIG_AMNEZIAWG_DEBUG) += -DDEBUG -g
 ccflags-$(if $(WIREGUARD_VERSION),y,) += -D'WIREGUARD_VERSION="$(WIREGUARD_VERSION)"'
 ccflags-$(if $(OMIT_ENDPOINTS),y,) += -D'OMIT_ENDPOINTS="$(OMIT_ENDPOINTS)"'
 
+awg_probe = $(shell grep -qs "$(1)" "$(srctree)/$(2)" && echo -D AWG_HAVE_$(3))
+
+AWG_PROBE_FLAGS := $(call awg_probe,timer_container_of,include/linux/timer.h,TIMER_CONTAINER_OF)
+AWG_PROBE_FLAGS += $(call awg_probe,sockaddr_inet,include/linux/in6.h,SOCKADDR_INET)
+AWG_PROBE_FLAGS += $(call awg_probe,netif_threaded_enable,include/linux/netdevice.h,NETIF_THREADED_ENABLE)
+AWG_PROBE_FLAGS += $(call awg_probe,rtnl_newlink_link_net,include/net/rtnetlink.h,RTNL_NEWLINK_LINK_NET)
+AWG_PROBE_FLAGS += $(call awg_probe,struct chacha_state,include/crypto/chacha.h,CHACHA_STATE)
+AWG_PROBE_FLAGS += $(call awg_probe,WQ_PERCPU,include/linux/workqueue.h,WQ_PERCPU)
+
+ccflags-y += $(AWG_PROBE_FLAGS)
+
+#ifneq ($(filter 1,$(V)),)
+$(info AWG compat probes: $(if $(AWG_PROBE_FLAGS),$(AWG_PROBE_FLAGS),none))
+#endif
+
 amneziawg-y := main.o noise.o device.o peer.o timers.o queueing.o send.o receive.o socket.o peerlookup.o allowedips.o ratelimiter.o cookie.o netlink.o junk.o header_protection.o
 
 ifeq ($(shell [ $(VERSION) -lt 6 -o \( $(VERSION) -eq 6 -a $(PATCHLEVEL) -lt 1 \) ] && echo y),y)
