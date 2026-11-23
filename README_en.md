@@ -200,3 +200,13 @@ Should you upgrade your kernel in the future, please remember that you may also 
 ## License
 
 This project is released under the [GPLv2](COPYING).
+
+---
+
+<div align="center">
+
+**made ❤️ for yourself**
+
+![Link](https://img.shields.io/badge/%E2%AC%86-Back_to_top-151b23?style=for-the-badge&logoColor=white&labelColor=0000FF&link=amneziawg-kernel-module-vds)
+
+</div>
